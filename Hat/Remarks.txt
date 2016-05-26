@@ -1,0 +1,9 @@
+
+Notes:
+2016.05.01 Create the first version Hat
+2016.05.13 Reconstruct all the files to make clear
+
+Todo:
+Pre-train
+visualize
+complex value

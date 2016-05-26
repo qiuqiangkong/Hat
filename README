@@ -1,0 +1,15 @@
+2016.05.26
+====================
+Installation:
+1. python version: 2.7+
+2. theano
+3. networkx (python package, for ploting graph)
+
+Usage:
+import sys
+sys.path.append('your_download_folder/Hat')
+from Hat.models import Sequential
+print 'sucess!'
+
+Examples:
+
