@@ -11,9 +11,6 @@ Modified: -
 import sys
 sys.path.append('..')
 import pickle
-import cPickle
-import os
-import gzip
 import numpy as np
 np.random.seed(1515)
 from Hat.models import Sequential
@@ -24,23 +21,8 @@ from Hat.callbacks import SaveModel, Validation
 from Hat.preprocessing import sparse_to_categorical
 from Hat.optimizers import Rmsprop
 import Hat.backend as K
+from Hat.datasets.mnist import load_data
 
-
-# load data
-def load_data():
-    dataset = 'mnist.pkl.gz'
-    if not os.path.isfile(dataset):
-        from six.moves import urllib
-        print 'downloading data ... (16.2 Mb)'
-        urllib.request.urlretrieve( 'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz', dataset )
-        
-    f = gzip.open( dataset, 'rb' )
-    train_set, valid_set, test_set = cPickle.load(f)
-    [tr_X, tr_y] = train_set
-    [va_X, va_y] = valid_set
-    [te_X, te_y] = test_set
-    f.close()
-    return tr_X, tr_y, va_X, va_y, te_X, te_y
 
 # resize data for fit into CNN. size: (batch_num*color_maps*height*weight)
 def reshapeX( X ):

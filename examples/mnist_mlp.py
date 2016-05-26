@@ -2,7 +2,6 @@
 SUMMARY:  Example for mnist classification, using MLP
           Training time: 2 s/epoch. (Tesla M2090)
           Test error: 1.84% after 20 epoches. (Better results can be got by tuning hyper-params)
-          Ref: http://deeplearning.net/tutorial/code/logistic_sgd.py
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.18
 Modified: 2016.05.25 Write annotation
@@ -12,33 +11,14 @@ import sys
 sys.path.append('..')
 import numpy as np
 np.random.seed(1515)
-import pickle
-import cPickle
-import gzip
-import os
 from Hat.models import Sequential
 from Hat.layers.core import InputLayer, Dense, Dropout
 from Hat.callbacks import SaveModel, Validation
 from Hat.preprocessing import sparse_to_categorical
 from Hat.optimizers import SGD, Rmsprop
 import Hat.backend as K
+from Hat.datasets.mnist import load_data
 
-# load data
-def load_data():
-    dataset = 'mnist.pkl.gz'
-    if not os.path.isfile(dataset):
-        from six.moves import urllib
-        print 'downloading data ... (16.2 Mb)'
-        urllib.request.urlretrieve( 'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz', dataset )
-        
-    f = gzip.open( dataset, 'rb' )
-    train_set, valid_set, test_set = cPickle.load(f)
-    [tr_X, tr_y] = train_set
-    [va_X, va_y] = valid_set
-    [te_X, te_y] = test_set
-    f.close()
-    return tr_X, tr_y, va_X, va_y, te_X, te_y
-   
 ### load & prepare data
 tr_X, tr_y, va_X, va_y, te_X, te_y = load_data()
 

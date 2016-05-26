@@ -15,23 +15,7 @@ import numpy as np
 import time
 from supports import to_list
 
-'''
-Templete for creating a new Callback class
-'''
-class YourCallback( Callback ):
-    def __init__( self, call_freq=3, # other params
-                ):
-        self._call_freq = call_freq
-        # your code here
-        
-    def compile( self, md ):
-        self._md = md
-        # your code here
-        
-    def call( self, # other params
-            ):
-        pass
-        # your code here
+
 
 '''
 Callback is an abstract class
@@ -50,6 +34,24 @@ class Callback( object ):
     @property
     def call_freq( self ):
         return self._call_freq
+        
+'''
+Templete for creating a new Callback class
+'''
+class YourCallback( Callback ):
+    def __init__( self, call_freq=3, # other params
+                ):
+        self._call_freq = call_freq
+        # your code here
+        
+    def compile( self, md ):
+        self._md = md
+        # your code here
+        
+    def call( self, # other params
+            ):
+        pass
+        # your code here
         
         
 '''
