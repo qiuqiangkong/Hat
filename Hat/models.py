@@ -176,12 +176,14 @@ class Model( Base ):
         N = len( x[0] )
         batch_num = int( N / batch_size )
         while self._epoch < n_epoch:
+            
             '''
             in_list = x+[0.]
             np.set_printoptions(threshold=np.nan, linewidth=1000, precision=10, suppress=True)
             print f_debug(*in_list)
             pause
             '''
+            
             
             # callback
             for callback in callbacks:

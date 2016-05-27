@@ -28,6 +28,9 @@ def format_data( value, dtype=_FLOATX ):
 def get_value( x ):
     return x.get_value()
     
+def cast( x, type ):
+    return T.cast( x, type )
+    
 ### basic operation
    
 def zeros( shape ):
@@ -62,6 +65,10 @@ def sqrt( x ):
     
 def abs( x ):
     return T.abs_( x )
+
+def conv2d( input, filters, border_mode ):
+    if border_mode=='same': border_mode='half'
+    return T.nnet.conv2d( input, filters, border_mode=border_mode )
     
 def concatenate( inputs, axis ):
     return T.concatenate( inputs, axis )

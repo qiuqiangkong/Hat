@@ -1,15 +1,46 @@
+'''
+SUMMARY:  Pooling Layers
+AUTHOR:   Qiuqiang Kong
+Created:  2016.05.22
+Modified: 2016.05.27 Add MaxPool1D
+--------------------------------------
+'''
 from core import Layer, Lambda
 from ..globals import new_id
 from .. import backend as K
 from .. import initializations
 from .. import activations
-from ..supports import to_list, get_mask
+from ..supports import to_list, to_tuple, get_mask
 import numpy as np
 from theano.tensor.signal import downsample
 
+def _max_pool_1d( input, in_shape, **kwargs ):
+    assert len(in_shape)==3, "shape.ndim should be 3, shape:(batch_size, n_time, n_in), yours is " + str(in_shape)
+    
+    # init kwargs
+    [batch_size, n_time, n_in] = in_shape
+    len_pool = kwargs['len_pool']
+    
+    # downsample
+    pool_size = (len_pool, 1)
+    
+    # size(output): (batch_size, n_outfmaps, n_time, 1)
+    output = downsample.max_pool_2d( input.dimshuffle(0,2,1,'x'), pool_size, ignore_border=True )
+    
+    # size(output): (batch_size, n_time, n_outfmaps)
+    output = output.dimshuffle(0,2,1,3).flatten(3)
+    out_shape = ( None, n_time//len_pool, n_in )
+    
+    return output, out_shape
+    
+class MaxPool1D( Lambda ):
+    def __init__( self, name=None, **kwargs ):
+        assert 'len_pool' in kwargs, "You must specifiy len_pool kwarg in MaxPool1D!"
+        super( MaxPool1D, self ).__init__( _max_pool_1d, name, **kwargs )
+
 # for cnn
 def _max_pool_2d( input, in_shape, **kwargs ):
-    assert len(in_shape)==4     # (batch_size, n_infmaps, height, width)
+    assert len(in_shape)==4, "shape.ndim should be 4, shape:(batch_size, n_infmaps, height, width), yours is " + str(in_shape)
     
     # init kwargs
     [batch_size, n_infmaps, height, width] = in_shape

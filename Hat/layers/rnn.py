@@ -50,7 +50,7 @@ class SimpleRnn( RnnBase ):
         
         in_shape = in_layer.out_shape
         input = in_layer.output
-        assert len(in_shape)==3, "The dim of input must be 3!"
+        assert len(in_shape)==3, "The dim of input must be 3! Your shape is " + str(in_shape)
         [ batch_size, n_time, n_in ] = in_shape
         
         # reverse data
@@ -129,7 +129,7 @@ class LSTM( RnnBase ):
         # prepare data
         in_shape = in_layer.out_shape
         input = in_layer.output
-        assert len(in_shape)==3, "The dim of input must be 3!"
+        assert len(in_shape)==3, "The dim of input must be 3! Your shape is " + str(in_shape)
         [ batch_size, n_time, n_in ] = in_shape
         
         # reverse data
@@ -223,7 +223,7 @@ class GRU( RnnBase ):
         
         in_shape = in_layer.out_shape
         input = in_layer.output
-        assert len(in_shape)==3, "The dim of input must be 3!"
+        assert len(in_shape)==3, "The dim of input must be 3! Your shape is " + str(in_shape)
         [ batch_size, n_time, n_in ] = in_shape
         
         # reverse data

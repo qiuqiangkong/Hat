@@ -1,33 +1,42 @@
 '''
 SUMMARY:  preprocessing data
-          move from supports to this file
+          move these files from supports to this file
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.25
-Modified: -
+Modified: 2016.05.27 Modify pad_trunc_seqs
 --------------------------------------
 '''
 import numpy as np
+from supports import to_list
 
 # truncate seq or pad with 0, input can be list or np.ndarray
-# if x is list, pad or trunc all elements in x to max_len
-# if x is ndarray, pad or trunc it to max_len
+# the element in x can be list or ndarray, then pad or trunc all elements in x to max_len
 def pad_trunc_seqs( x, max_len ):
     type_x = type( x )
-    list_x = to_list( x )
+    N = len( x )
     list_new = []
-    for e in list_x:
-        shape = e.shape
-        N = len( e )
-        if N < max_len:
-            pad_shape = (max_len-N,) + shape[1:]
-            pad = np.zeros( pad_shape )
-            list_new.append( np.vstack( (e, pad) ) )
-        else:
-            list_new.append( e[0:max_len] )
+    for e in x:
+        L = len( e )
+        if type(e)==np.ndarray:
+            shape = e.shape
+            if L < max_len:
+                pad_shape = (max_len-L,) + shape[1:]
+                pad = np.zeros( pad_shape )
+                list_new.append( np.vstack( (e, pad) ) )
+            else:
+                list_new.append( e[0:max_len] )
+        if type(e)==list:
+            if L < max_len:
+                pad = [0] * ( max_len - L )
+                list_new.append( e + pad )
+            else:
+                list_new.append( e[0:max_len] )
+    
     if type_x==list:
         return list_new
     if type_x==np.ndarray:
-        return list_new[0]
+        return np.array( list_new )
+    
 
 # convert from 3d to 4d, for input of cnn        
 def reshape_3d_to_4d( X ):

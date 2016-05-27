@@ -1,7 +1,7 @@
 '''
 SUMMARY:  Example for mnist classification, using Lenet-CNN
           Training time: 25 s/epoch. (Tesla M2090)
-          Test error: 0.78% after 20 epoches. (Better results can be got by tuning hyper-params)
+          Test error: 0.74% after 30 epoches. (Better results can be got by tuning hyper-params)
 Ref:      https://github.com/fchollet/keras/blob/master/examples/mnist_cnn.py
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.18
@@ -76,7 +76,7 @@ validation = Validation( tr_x=None, tr_y=None, va_x=va_X, va_y=va_y, te_x=te_X, 
 callbacks = [validation, save_model]
 
 ### train model
-md.fit( x=tr_X, y=tr_y, batch_size=500, n_epoch=20, loss_type='categorical_crossentropy', optimizer=optimizer, callbacks=callbacks )
+md.fit( x=tr_X, y=tr_y, batch_size=500, n_epoch=50, loss_type='categorical_crossentropy', optimizer=optimizer, callbacks=callbacks )
 
 ### predict using model
 pred_y = md.predict( te_X )
