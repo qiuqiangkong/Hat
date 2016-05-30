@@ -29,6 +29,9 @@ class Base( object ):
         for layer in self._layer_list:
             self._reg_value += layer.reg_value
             
+        # tr_phase_node
+        self._tr_phase_node = K.common_tr_phase_node
+            
         # time
         self._tr_time = 0
         self._epoch = 0
@@ -61,6 +64,10 @@ class Base( object ):
     @property
     def tr_time( self ):
         return self._tr_time
+        
+    @property
+    def tr_phase_node( self ):
+        return self._tr_phase_node
         
     def summary( self ):
         print '---------- summary -----------'
@@ -109,15 +116,20 @@ class Base( object ):
 Supervised Model
 '''
 class Model( Base ):
-    def __init__( self, in_layers, out_layers ):
+    def __init__( self, in_layers, out_layers, obj_weights=[1.] ):
         super( Model, self ).__init__( in_layers )
+        assert len(out_layers)==len(obj_weights), "num of out_layers must equal num of obj_weights!"
+        
         # out layers
         out_layers = to_list( out_layers )
         self._out_layers = out_layers
+        self._obj_weights = obj_weights
         
         # out_nodes & create gt_nodes
         self._out_nodes = [ layer.output for layer in self._out_layers ]
         self._gt_nodes = [ K.placeholder( len(layer.out_shape) ) for layer in self._out_layers ]
+        
+        
         
     '''
     Fit model. x, y can be list of ndarrays. 
@@ -143,8 +155,8 @@ class Model( Base ):
         sh_y = [ K.sh_variable( value=e, name='tr_y' ) for e in y ]
         
         # loss
-        loss_node = sum( [ obj.get( loss_type )( pred_node, gt_node ) 
-                        for pred_node, gt_node in zip( self._out_nodes, self._gt_nodes ) ] )
+        loss_node = sum( [ obj.get( loss_type )( pred_node, gt_node ) * w 
+                        for pred_node, gt_node, w in zip( self._out_nodes, self._gt_nodes, self._obj_weights ) ] )
         
         # gradient
         gparams = K.grad( loss_node + self._reg_value, self._params )
@@ -160,7 +172,7 @@ class Model( Base ):
         input_nodes = self._in_nodes + self._gt_nodes
         output_nodes = [ loss_node ]
         given_nodes = sh_x + sh_y
-        f = K.function_given( batch_size, input_nodes, output_nodes, given_nodes, updates )
+        f = K.function_given( batch_size, input_nodes, self._tr_phase_node, output_nodes, given_nodes, updates )
         
         # debug
         # you can write debug function here
@@ -209,9 +221,11 @@ class Model( Base ):
         
         # compile predict model
         if not hasattr( self, '_f_predict' ):
-            input_nodes = self._in_nodes
-            self._f_predict = K.function_no_given( input_nodes, self._out_nodes )
-            
+            if len( self._out_nodes )==1:   # if only 1 out_node, then return it directly instead of list
+                self._f_predict = K.function_no_given( self._in_nodes, self._tr_phase_node, self._out_nodes[0] )
+            else:
+                self._f_predict = K.function_no_given( self._in_nodes, self._tr_phase_node, self._out_nodes )
+        
         # do predict
         in_list = x + [0.]
         y_out = self._f_predict( *in_list )

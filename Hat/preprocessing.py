@@ -1,9 +1,12 @@
 '''
-SUMMARY:  preprocessing data
-          move these files from supports to this file
+SUMMARY:  Example for imdb classification, using Lenet-CNN
+          Training time: 25 s/epoch. (Tesla M2090)
+          Test error: 0.74% after 30 epoches. (Better results can be got by tuning hyper-params)
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.25
 Modified: 2016.05.27 Modify pad_trunc_seqs
+          2016.05.28 Add force int(x) in sparse_to_categorical
+          2016.05.30 Fix bug in pad_trunc_seqs
 --------------------------------------
 '''
 import numpy as np
@@ -11,7 +14,8 @@ from supports import to_list
 
 # truncate seq or pad with 0, input can be list or np.ndarray
 # the element in x can be list or ndarray, then pad or trunc all elements in x to max_len
-def pad_trunc_seqs( x, max_len ):
+# type: 'post' | 'pre'
+def pad_trunc_seqs( x, max_len, pad_type='post' ):
     type_x = type( x )
     N = len( x )
     list_new = []
@@ -22,15 +26,19 @@ def pad_trunc_seqs( x, max_len ):
             if L < max_len:
                 pad_shape = (max_len-L,) + shape[1:]
                 pad = np.zeros( pad_shape )
-                list_new.append( np.vstack( (e, pad) ) )
+                if pad_type=='pre': list_new.append( np.concatenate( (pad, e), axis=0 ) )
+                if pad_type=='post': list_new.append( np.concatenate( (e, pad), axis=0 ) )
             else:
-                list_new.append( e[0:max_len] )
+                if pad_type=='pre': list_new.append( e[L-max_len:] )
+                if pad_type=='post': list_new.append( e[0:max_len] )
         if type(e)==list:
             if L < max_len:
                 pad = [0] * ( max_len - L )
-                list_new.append( e + pad )
+                if pad_type=='pre': list_new.append( pad + e )
+                if pad_type=='post': list_new.append( e + pad )
             else:
-                list_new.append( e[0:max_len] )
+                if pad_type=='pre': list_new.append( e[L-max_len:] )
+                if pad_type=='post': list_new.append( e[0:max_len] )
     
     if type_x==list:
         return list_new
@@ -44,7 +52,9 @@ def reshape_3d_to_4d( X ):
     return X.reshape( (N, 1, n_row, n_col) )
     
 # sparse label to categorical label
+# x is 1-dim ndarray
 def sparse_to_categorical( x, n_out ):
+    x = x.astype(int)   # force type to int
     shape = x.shape
     x = x.flatten()
     N = len(x)

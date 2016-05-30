@@ -103,7 +103,7 @@ class Validation( Callback ):
     '''
     def compile( self, md ):
         input_nodes = md.in_nodes
-        self._f_pred = K.function_no_given( input_nodes, md.out_nodes )
+        self._f_pred = K.function_no_given( input_nodes, md.tr_phase_node, md.out_nodes )
         self._md = md
         
  
@@ -170,7 +170,7 @@ class Debug( Callback ):
         
     def compile( self, md ):
         self._md = md
-        self._f = K.function_no_given( md.in_nodes, md._layer_seq[3].output )
+        self._f = K.function_no_given( md.in_nodes, md.tr_phase_node, md._layer_seq[3].output )
         
     def call( self ):
         in_list = self._x + [0.]

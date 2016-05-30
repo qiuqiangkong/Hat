@@ -12,7 +12,6 @@ from .. import initializations
 from .. import activations
 from ..supports import to_list, to_tuple, get_mask
 import numpy as np
-from theano.tensor.signal import downsample
 
 def _max_pool_1d( input, in_shape, **kwargs ):
     assert len(in_shape)==3, "shape.ndim should be 3, shape:(batch_size, n_time, n_in), yours is " + str(in_shape)
@@ -55,6 +54,26 @@ class MaxPool2D( Lambda ):
     def __init__( self, name=None, **kwargs ):
         assert 'pool_size' in kwargs, "You must specifiy pool_size kwarg in MaxPool2D!"
         super( MaxPool2D, self ).__init__( _max_pool_2d, name, **kwargs )
+
+def _pool_2d( input, in_shape, **kwargs ):
+    assert len(in_shape)==4, "shape.ndim should be 4, shape:(batch_size, n_infmaps, height, width), yours is " + str(in_shape)
+    
+    # init kwargs
+    [batch_size, n_infmaps, height, width] = in_shape
+    pool_size = kwargs['pool_size']
+    pool_mode = kwargs['pool_mode']
+    
+    # downsample
+    output = K.pool2d( input, ds=pool_size, mode=pool_mode )
+    out_shape = ( None, n_infmaps, int(height/pool_size[0]), int(width/pool_size[1]) )
+    return output, out_shape
+    
+# kwargs: 'max' | 'avg'
+class Pool2D( Lambda ):
+    def __init__( self, name=None, **kwargs ):
+        assert 'pool_size' in kwargs, "You must specifiy pool_size kwarg!"
+        assert 'pool_mode' in kwargs, "You must specifiy pool_mode kwarg! eg. 'max', 'avg'"
+        super( Pool2D, self ).__init__( _pool_2d, name, **kwargs )
 
 '''
 Mean along time axis in RNN. 

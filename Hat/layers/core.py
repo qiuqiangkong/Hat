@@ -257,6 +257,7 @@ class Dropout( Layer ):
     def __init__( self, p_drop=0.1, name=None ):
         super( Dropout, self ).__init__( name )
         self._p_drop = p_drop
+        self._tr_phase_node = K.common_tr_phase_node
         
     def __call__( self, in_layers ):
         # only one input layer is allowed
@@ -266,7 +267,7 @@ class Dropout( Layer ):
         
         # dropout
         input = in_layer.output
-        output = K.dropout( input, self._p_drop )
+        output = K.dropout( input, self._p_drop, self._tr_phase_node )
         
         # assign attributes
         self._prevs = in_layers
@@ -292,6 +293,7 @@ class BN( Layer ):
         self._momentum = 0.9
         self._global_mean = 0.
         self._global_var = 0.
+        self._tr_phase_node = K.tr_phase_node
         
     def __call__( self, in_layers ):
         # only one input layer is allowed
@@ -307,8 +309,7 @@ class BN( Layer ):
         self._beta = initializations.get( 'zeros' )( n_in, name=self._name+'_beta' )
         
         # do batch normalization
-        output = K.ifelse( K.eq( K.tr_phase_node, 1. ), self._tr_phase(input), self._te_phase(input) )
-        #output = self._tr_phase(input)
+        output = K.ifelse( K.eq( self._tr_phase_node, 1. ), self._tr_phase(input), self._te_phase(input) )
 
         # assign attributes
         self._prevs = in_layers

@@ -2,8 +2,8 @@ import numpy as np
 import theano
 import theano.tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
-# from theano.ifelse import ifelse
 import theano.ifelse
+from theano.tensor.signal import pool
 
 _FLOATX = theano.config.floatX
 
@@ -70,6 +70,10 @@ def conv2d( input, filters, border_mode ):
     if border_mode=='same': border_mode='half'
     return T.nnet.conv2d( input, filters, border_mode=border_mode )
     
+def pool2d( input, ds, ignore_border=True, st=None, padding=(0, 0), mode='max' ):
+    if mode=='avg': mode='average_exc_pad'
+    return pool.pool_2d( input, ds, ignore_border, st, padding, mode )
+    
 def concatenate( inputs, axis ):
     return T.concatenate( inputs, axis )
     
@@ -128,18 +132,18 @@ def binary_crossentropy( p_y_pred, y_gt ):
 
 ### training phase node
 # A node to represent training 1.0 or testing 0.
-tr_phase_node = placeholder( n_dim=0, name='tr_phase_node' )
+common_tr_phase_node = placeholder( n_dim=0, name='tr_phase_node' )
     
 ### functions
 # theano function, without givens
 # using method eg. f( x, 0. )
-def function_no_given( input_nodes, output_nodes ):
+def function_no_given( input_nodes, tr_phase_node, output_nodes ):
+    #f = theano.function( input_nodes + [tr_phase_node], output_nodes, on_unused_input='warn' )
     f = theano.function( input_nodes + [tr_phase_node], output_nodes, on_unused_input='ignore' )
     return f
 
 # theano function, all inputs correspond to givens
-# using method eg. f( 42, 1. )
-def function_given( batch_size, input_nodes, output_nodes, given_nodes, updates=None ):
+def function_given( batch_size, input_nodes, tr_phase_node, output_nodes, given_nodes, updates=None ):
     assert len(input_nodes)==len(given_nodes), "Number of input and given must be same!"
     index_node = T.iscalar()
     f = theano.function( [index_node, tr_phase_node], output_nodes, givens={
@@ -157,7 +161,7 @@ def grad( cost, params ):
 scan = theano.scan
     
 ### dropout
-def dropout( x, p_drop ):
+def dropout( x, p_drop, tr_phase_node ):
     if p_drop < 0. or p_drop >= 1:
         raise Exception('Dropout level must be in interval (0,1)')
     seed = np.random.randint(10e6)
