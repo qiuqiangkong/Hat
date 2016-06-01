@@ -84,6 +84,13 @@ class Base( object ):
         for param in layer.params:
             n_params += np.prod( K.get_value( param ).shape )
         return n_params
+        
+    # check if the dim of output is correct
+    def _check_data( self, y, loss_type ):
+        if loss_type in ['categorical_crossentropy', 'binary_crossentropy', 'kl_divergence']:
+            for e in y:
+                assert e.ndim==2, "your y.ndim!=2, try use sparse_to_categorical(y)"
+        
 
     def plot_connection( self ):
         G = nx.DiGraph()
@@ -145,6 +152,9 @@ class Model( Base ):
         
         # shuffle data
         x, y = shuffle( x, y )
+        
+        # check data
+        self._check_data( y, loss_type )
         
         # memory usage
         mem_usage = memory_usage( x, y )
