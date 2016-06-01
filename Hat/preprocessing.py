@@ -44,12 +44,28 @@ def pad_trunc_seqs( x, max_len, pad_type='post' ):
         return list_new
     if type_x==np.ndarray:
         return np.array( list_new )
-    
+
+# concatenate feautres     
+def mat_2d_to_3d( X, agg_num, hop ):
+    # pad to at least one block
+    len_X, n_in = X.shape
+    if ( len_X < agg_num ):
+        X = np.concatenate( ( X, np.zeros((agg_num-len_X, n_in)) ) )
+        
+    # agg 2d to 3d
+    len_X = len( X )
+    i1 = 0
+    X3d = []
+    while ( i1+agg_num <= len_X ):
+        X3d.append( X[i1:i1+agg_num] )
+        i1 += hop
+    return np.array( X3d )
 
 # convert from 3d to 4d, for input of cnn        
 def reshape_3d_to_4d( X ):
     [ N, n_row, n_col ] = X.shape
     return X.reshape( (N, 1, n_row, n_col) )
+    
     
 # sparse label to categorical label
 # x is 1-dim ndarray
