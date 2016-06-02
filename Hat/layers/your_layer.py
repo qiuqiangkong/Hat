@@ -9,11 +9,13 @@ from ..import backend as K
 # Eg. 
 def your_func1( input, in_shape, **kwargs ):
     # your implementation here
+    # assert 'xxx' in kwargs, "You must specifiy xxx kwarg!"
     # ...
     return output, out_shape
     
 def your_func2( input1, input2, in_shape1, in_shape2, **kwargs ):
     # your implementation here
+    # assert 'xxx' in kwargs, "You must specifiy xxx kwarg!"
     # ...
     return output, out_shape
 

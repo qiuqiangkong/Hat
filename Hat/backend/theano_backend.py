@@ -101,6 +101,18 @@ def lt( a, b ):
 def ifelse( condition, op1, op2 ):
     return theano.ifelse.ifelse( condition, op1, op2 )
     
+### random number
+def rng_normal( size, avg, std ):
+    seed = np.random.randint(10e6)
+    rng = RandomStreams(seed)
+    return rng.normal( size, avg, std )
+
+# binomial distribution. p is p(y=1)    
+def rng_binomial( shape, p ):
+    seed = np.random.randint(10e6)
+    rng = RandomStreams(seed)
+    return rng.binomial( shape, n=1, p=p, dtype=_FLOATX )
+    
 ### activations
 def softmax( x ):
     return T.nnet.softmax( x )
@@ -157,18 +169,4 @@ def grad( cost, params ):
     return theano.grad( cost, params )
     
 # scan, interface is same as theano
-
 scan = theano.scan
-    
-### dropout
-def dropout( x, p_drop, tr_phase_node ):
-    if p_drop < 0. or p_drop >= 1:
-        raise Exception('Dropout level must be in interval (0,1)')
-    seed = np.random.randint(10e6)
-    rng = RandomStreams(seed)
-    p_retain = 1. - p_drop
-    xtr = x * rng.binomial(x.shape, p=p_retain, dtype=x.dtype)
-    xtr /= p_retain
-    xte = x
-    z = theano.ifelse.ifelse( T.eq( tr_phase_node, 1. ), xtr, xte )
-    return z

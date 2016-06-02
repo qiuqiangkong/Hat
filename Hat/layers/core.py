@@ -267,7 +267,7 @@ class Dropout( Layer ):
         
         # dropout
         input = in_layer.output
-        output = K.dropout( input, self._p_drop, self._tr_phase_node )
+        output = K.ifelse( K.eq( self._tr_phase_node, 1. ), self._tr_phase( input, self._p_drop ), input )
         
         # assign attributes
         self._prevs = in_layers
@@ -281,6 +281,14 @@ class Dropout( Layer ):
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
         self.check_attributes()                             # check if all attributes are implemented
         return self
+        
+    def _tr_phase( self, input, p_drop ):
+        if p_drop < 0. or p_drop >= 1:
+            raise Exception('Dropout level must be in interval (0,1)')
+        keep = K.rng_binomial( input.shape, 1.-p_drop )
+        output = input * keep
+        output /= (1.-p_drop)
+        return output
     
     
 '''
@@ -348,11 +356,3 @@ class BN( Layer ):
     @property
     def beta( self ):
         return self._beta
-        
-
-    
-class Pool():
-    pass
-    
-class Embedding():
-    pass
