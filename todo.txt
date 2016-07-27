@@ -1,3 +1,0 @@
-* Remind the users if Flatten is not used. 
-* save model will fail when model is large (cifar-cnn)
-* example/cifar/main_cnn.py, do not save model yet. 
