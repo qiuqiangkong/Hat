@@ -7,6 +7,7 @@ Created:  2016.05.25
 Modified: 2016.05.27 Modify pad_trunc_seqs
           2016.05.28 Add force int(x) in sparse_to_categorical
           2016.05.30 Fix bug in pad_trunc_seqs
+          2016.06.25 Add pad_trunc_seq
 --------------------------------------
 '''
 import numpy as np
@@ -44,6 +45,19 @@ def pad_trunc_seqs( x, max_len, pad_type='post' ):
         return list_new
     if type_x==np.ndarray:
         return np.array( list_new )
+        
+# pad or trunc seq, x should be ndarray
+def pad_trunc_seq( x, max_len, pad_type='post' ):
+    L = len(x)
+    shape = x.shape
+    if L < max_len:
+        pad_shape = (max_len-L,) + shape[1:]
+        pad = np.zeros( pad_shape )
+        if pad_type=='pre': return np.concatenate( (pad, x), axis=0 )
+        if pad_type=='post': return np.concatenate( (x, pad), axis=0 )
+    else:
+        if pad_type=='pre': return x[L-max_len:]
+        if pad_type=='post': return x[0:max_len]
 
 # concatenate feautres     
 def mat_2d_to_3d( X, agg_num, hop ):

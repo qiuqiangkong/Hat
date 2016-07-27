@@ -12,6 +12,7 @@ from .. import initializations
 from .. import activations
 from ..supports import to_list, to_tuple, get_mask
 import numpy as np
+# from theano.tensor.signal.downsample import max_pool_2d
 
 def _max_pool_1d( input, in_shape, **kwargs ):
     assert len(in_shape)==3, "shape.ndim should be 3, shape:(batch_size, n_time, n_in), yours is " + str(in_shape)
@@ -46,7 +47,7 @@ def _max_pool_2d( input, in_shape, **kwargs ):
     pool_size = kwargs['pool_size']
     
     # downsample
-    output = downsample.max_pool_2d( input, pool_size, ignore_border=True )
+    output = K.pool2d( input, pool_size, ignore_border=True )
     out_shape = ( None, n_infmaps, int(height/pool_size[0]), int(width/pool_size[1]) )
     return output, out_shape
     

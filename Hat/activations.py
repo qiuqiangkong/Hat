@@ -13,11 +13,18 @@ import backend as K
 def linear( x ):
     return x
     
+# x can be tensor
 def sigmoid( x ):
     return K.sigmoid( x )
 
+# x can be tensor
 def softmax( x ):
-    return K.softmax( x )
+    if x.ndim==2:
+        return K.softmax( x )
+    if x.ndim>2:
+        shape = x.shape
+        x_flatten = x.reshape( ( K.prod(shape[0:-1]), shape[-1] ) )
+        return K.softmax( x_flatten ).reshape( shape )
     
 def tanh( x ):
     return K.tanh( x )

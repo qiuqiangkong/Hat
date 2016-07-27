@@ -1,3 +1,10 @@
+'''
+SUMMARY:  theano backend
+AUTHOR:   Qiuqiang Kong
+Created:  2016.05.20
+Modified: 2016.07.23 Fix sh_variable()
+--------------------------------------
+'''
 import numpy as np
 import theano
 import theano.tensor as T
@@ -18,7 +25,8 @@ def placeholder( n_dim=None, name=None ):
     
 # shared tensor from numpy array
 def sh_variable( value, name=None, dtype=_FLOATX ):
-    return theano.shared( value=value.astype(dtype), name=name )
+    value = np.asarray( value, dtype=dtype)
+    return theano.shared( value, name )
 
 # format data    
 def format_data( value, dtype=_FLOATX ):
@@ -65,6 +73,12 @@ def sqrt( x ):
     
 def abs( x ):
     return T.abs_( x )
+    
+def power( x, a ):
+    return T.power( x, a )
+    
+def prod( x ):
+    return T.prod( x )
 
 def conv2d( input, filters, border_mode ):
     if border_mode=='same': border_mode='half'
@@ -149,9 +163,9 @@ common_tr_phase_node = placeholder( n_dim=0, name='tr_phase_node' )
 ### functions
 # theano function, without givens
 # using method eg. f( x, 0. )
-def function_no_given( input_nodes, tr_phase_node, output_nodes ):
+def function_no_given( input_nodes, tr_phase_node, output_nodes, updates=None ):
     #f = theano.function( input_nodes + [tr_phase_node], output_nodes, on_unused_input='warn' )
-    f = theano.function( input_nodes + [tr_phase_node], output_nodes, on_unused_input='ignore' )
+    f = theano.function( input_nodes + [tr_phase_node], output_nodes, updates=updates, on_unused_input='ignore' )
     return f
 
 # theano function, all inputs correspond to givens

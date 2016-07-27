@@ -2,7 +2,7 @@
 SUMMARY:  basic layers for building deep neural network
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.18
-Modified: -
+Modified: 2016.06.09 Add n_dim param to Flatten
 --------------------------------------
 '''
 import numpy as np
@@ -35,7 +35,7 @@ class Layer( object ):
         return self._name
 
     '''
-    _nexts, _prevs, _output, _params, _regs are abstract properties. If you are implementing a new Class based on Layer, 
+    Abstract properties. including _nexts, _prevs, _output, _params, _regs are . If you are implementing a new Class based on Layer, 
     the corresponding attributes of below must be implemented. 
     '''
     @property
@@ -240,6 +240,7 @@ class Merge( Layer ):
 '''
 Flatten Layer. Flatten mutli dim input to 2D output
 '''
+'''
 def _flatten( input, in_shape ):
     output = input.flatten(2)
     out_shape = ( None, np.prod( in_shape[1:] ) )
@@ -248,7 +249,39 @@ def _flatten( input, in_shape ):
 class Flatten( Lambda ):
     def __init__( self, name=None ):
         super( Flatten, self ).__init__( _flatten, name )
-    
+'''
+class Flatten( Layer ):
+    def __init__( self, ndim=2, name=None ):
+        super( Flatten, self ).__init__( name )
+        self._ndim = ndim
+        
+    def __call__( self, in_layers ):
+        # only one input layer is allowed
+        in_layers = to_list( in_layers )
+        assert len(in_layers)==1, "The input of Dense can only be one layer!"
+        in_layer = in_layers[0]
+        
+        # do flatten
+        input = in_layer.output
+        in_shape = in_layer.out_shape
+        output = input.flatten( self._ndim )
+        if self._ndim==1:
+            out_shape = in_shape[0]
+        else:
+            out_shape = in_shape[0:self._ndim-1] + ( np.prod( in_shape[self._ndim-1:] ), )
+        
+        # assign attributes
+        self._prevs = in_layers
+        self._nexts = []
+        self._out_shape = out_shape
+        self._output = output
+        self._params = []
+        self._reg_value = 0.
+        
+        # below are compulsory parts
+        [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
+        self.check_attributes()                             # check if all attributes are implemented
+        return self
 
 '''
 Dropout layer

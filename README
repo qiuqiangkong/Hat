@@ -8,13 +8,11 @@ Characters:
 Installation:
 1. python version: 2.7+
 2. theano
-3. networkx (python package, for ploting graph)
+3. networkx (optional. for ploting graph)
 
 Usage:
 import sys
 sys.path.append('your_download_folder/Hat')
-from Hat.models import Sequential
-print 'sucess!'
 
 Examples:
 https://github.com/qiuqiangkong/Hat/tree/master/examples

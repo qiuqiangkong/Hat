@@ -2,7 +2,7 @@
 Notes:
 2016.05.01 Create the first version Hat
 2016.05.13 Reconstruct all the files to make clear
-
+2016.06.02 Create AddNoise Layer
 Todo:
 Pre-train
 visualize

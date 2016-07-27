@@ -2,7 +2,7 @@
 SUMMARY:  Callbacks, to validate, save model every several epochs
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.14
-Modified: -
+Modified: 2016.07.25 Modify evalute() to batch version
 --------------------------------------
 '''
 import backend as K
@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 from supports import to_list
+import sys
 
 
 
@@ -58,9 +59,10 @@ class YourCallback( Callback ):
 metric_types can be list or string
 '''
 class Validation( Callback ):
-    def __init__( self, tr_x=None, tr_y=None, va_x=None, va_y=None, te_x=None, te_y=None, 
+    def __init__( self, tr_x=None, tr_y=None, va_x=None, va_y=None, te_x=None, te_y=None, batch_size=100,
                   call_freq=3, metric_types=['categorical_error'], dump_path='validation.p'):
         # init values
+        self._batch_size = batch_size
         self._call_freq = call_freq
         self._metric_types = to_list( metric_types )
         self._dump_path = dump_path
@@ -120,14 +122,36 @@ class Validation( Callback ):
         print
         
     def _evaluate( self, x, y, test_type ):
-        in_list = x + [0.]
         n_out_nodes = len(y)
         
+        # for each metric
         for metric in self._metric_types:
-            y_out = self._f_pred( *in_list )
+            t1 = time.time()
+            # put all data in GPU
+            if self._batch_size is None:
+                in_list = x + [0.]
+                y_out = self._f_pred( *in_list )
+            # put batch data in GPU
+            else:             
+                N = len(x[0])
+                batch_num = int( np.ceil( float(N) / self._batch_size ) )
+                y_out = [[]] * n_out_nodes
+                for i1 in xrange( batch_num ):
+                    in_list = [ e[i1*self._batch_size : min( (i1+1)*self._batch_size, N ) ] for e in x ] + [0.]
+                    batch_y_out = self._f_pred( *in_list )
+                    for j1 in xrange(n_out_nodes):
+                        y_out[j1].append( batch_y_out[j1] )
+                    
+                    # print process
+                    self._print_progress( batch_num, i1 )
+                        
+                # get y_out
+                y_out = [ np.concatenate(e, axis=0) for e in y_out ]
+                
+            t2 = time.time()
+            
+            # evaluate
             val = 0.
-            
-            
             if metric=='prec_recall_fvalue':
                 for i1 in xrange( n_out_nodes ):
                     prec, recall, fvalue = metrics.get( metric )( y_out[i1], y[i1], 0.5 )
@@ -139,8 +163,15 @@ class Validation( Callback ):
             key = test_type + '_' + metric
             self._r[ key ].append( val )
             if metric!='confusion_matrix':
-                print key, val, 
-
+                f = "{0:<30} {1:<10} {2:<10}"
+                print_time = '| time: %.2f s' % (t2-t1)
+                print f.format( key+':', '%.5f' % val, print_time )
+                
+    # print progress on screen
+    def _print_progress( self, batch_num, curr_batch_num ):
+        sys.stdout.write("testing: %d%%   \r" % ( float(curr_batch_num)/float(batch_num)*100 ) )
+        sys.stdout.flush()
+        
 '''
 Save Model every n-epoches
 '''
@@ -157,7 +188,7 @@ class SaveModel( Callback ):
         try:
             pickle.dump( self._md, open( dump_path, 'wb' ) )
         except:
-            assert False, "Did you create a folder named '" + self._dump_fd + "'?"
+            assert False, "Is the model too large to save or did you create a folder named '" + self._dump_fd + "'?"
             
         
 class Debug( Callback ):

@@ -1,3 +1,10 @@
+'''
+SUMMARY:  Build Model
+AUTHOR:   Qiuqiang Kong
+Created:  2016.05.01
+Modified: 2016.07.25 Modify fit() to batch version
+--------------------------------------
+'''
 import sys
 from supports import to_list, BFT, shuffle, memory_usage
 from optimizers import *
@@ -89,7 +96,7 @@ class Base( object ):
     def _check_data( self, y, loss_type ):
         if loss_type in ['categorical_crossentropy', 'binary_crossentropy', 'kl_divergence']:
             for e in y:
-                assert e.ndim==2, "your y.ndim!=2, try use sparse_to_categorical(y)"
+                assert e.ndim!=1, "your y.ndim is 1, try use sparse_to_categorical(y)"
         
 
     def plot_connection( self ):
@@ -135,14 +142,11 @@ class Model( Base ):
         # out_nodes & create gt_nodes
         self._out_nodes = [ layer.output for layer in self._out_layers ]
         self._gt_nodes = [ K.placeholder( len(layer.out_shape) ) for layer in self._out_layers ]
-        
-        
-        
+
     '''
-    Fit model. x, y can be list of ndarrays. 
+    memory mode 0 (default): transfer from cpu to gpu every time, 1: store all data in gpu
     '''
-    def fit( self, x, y, batch_size=100, n_epoch=10, loss_type='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, 
-             callbacks=[], verbose=1 ):
+    def fit( self, x, y, batch_size=100, n_epoch=10, loss_type='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], memory_mode=0, verbose=1 ):
         x = to_list( x )
         y = to_list( y )
         
@@ -157,12 +161,8 @@ class Model( Base ):
         self._check_data( y, loss_type )
         
         # memory usage
-        mem_usage = memory_usage( x, y )
-        print 'memory usage:', mem_usage / 8e6, 'Mb'
-        
-        # store data in shared memory (GPU)
-        sh_x = [ K.sh_variable( value=e, name='tr_x' ) for e in x ]
-        sh_y = [ K.sh_variable( value=e, name='tr_y' ) for e in y ]
+        #mem_usage = memory_usage( x, y )
+        #print 'memory usage:', mem_usage / 8e6, 'Mb'
         
         # loss
         loss_node = sum( [ obj.get( loss_type )( pred_node, gt_node ) * w 
@@ -178,53 +178,56 @@ class Model( Base ):
         # gradient based opt
         updates = optimizer.get_updates( self._params, gparams )
         
-        # compile model
-        input_nodes = self._in_nodes + self._gt_nodes
-        output_nodes = [ loss_node ]
-        given_nodes = sh_x + sh_y
-        f = K.function_given( batch_size, input_nodes, self._tr_phase_node, output_nodes, given_nodes, updates )
-        
-        # debug
-        # you can write debug function here
-        #f_debug = K.function_no_given( self._in_nodes, self._layer_list[1].tmp )
-        
         # compile for callback
         if callbacks is not None:
             callbacks = to_list( callbacks )
             for callback in callbacks:
                 callback.compile( self ) 
+        
+        if memory_mode==0:
+            # compile model
+            input_nodes = self._in_nodes + self._gt_nodes
+            output_nodes = [ loss_node ]
+            f = K.function_no_given( input_nodes, self._tr_phase_node, output_nodes, updates )
+            
+        if memory_mode==1:
+            # store data in shared memory (GPU)
+            sh_x = [ K.sh_variable( value=e, name='tr_x' ) for e in x ]
+            sh_y = [ K.sh_variable( value=e, name='tr_y' ) for e in y ]
+            
+            # compile model
+            input_nodes = self._in_nodes + self._gt_nodes
+            output_nodes = [ loss_node ]
+            given_nodes = sh_x + sh_y
+            f = K.function_given( batch_size, input_nodes, self._tr_phase_node, output_nodes, given_nodes, updates )
 
         # train
         N = len( x[0] )
-        batch_num = int( N / batch_size )
+        batch_num = int( np.ceil( float(N) / batch_size ) )
         while self._epoch < n_epoch:
-            
-            '''
-            in_list = x+[0.]
-            np.set_printoptions(threshold=np.nan, linewidth=1000, precision=10, suppress=True)
-            print f_debug(*in_list)
-            pause
-            '''
-            
-            
             # callback
             for callback in callbacks:
                 if ( self._epoch % callback.call_freq == 0 ):
                     callback.call()
-
+            
             print
             # train
             t1 = time.time()
             for i2 in xrange(batch_num):
-                loss = f(i2, 1.)[0]                     # training phase          
+                if memory_mode==0:
+                    batch_x = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in x ]
+                    batch_y = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in y ]
+                    in_list = batch_x + batch_y + [1.]
+                    loss = f( *in_list )[0]                     # training phase          
+                if memory_mode==1:
+                    loss = f(i2, 1.)[0]                     # training phase          
                 if verbose: self.print_progress( self._epoch, batch_num, i2 )
             t2 = time.time()
             self._tr_time += (t2 - t1)
             self._epoch += 1
-            print
-            #print '\n', t2-t1, 's'          # print an empty line
-        
-    def predict( self, x ):
+            print '\n', 'train time: ', "%.2f " % (t2-t1), 's'          # print an empty line
+
+    def predict( self, x, batch_size=100 ):
         # format data
         x = to_list( x )
         x = [ K.format_data(e) for e in x ]
@@ -237,8 +240,24 @@ class Model( Base ):
                 self._f_predict = K.function_no_given( self._in_nodes, self._tr_phase_node, self._out_nodes )
         
         # do predict
-        in_list = x + [0.]
-        y_out = self._f_predict( *in_list )
+        # put all data in GPU
+        if batch_size is None:
+            in_list = x + [0.]
+            y_out = self._f_predict( *in_list )
+        # put batch data in GPU
+        else:
+            N = len(x[0])
+            batch_num = int( np.ceil( float(N) / batch_size ) )
+            n_out_nodes = len( self._out_nodes )
+            y_out = [[]] * n_out_nodes
+            for i1 in xrange( batch_num ):
+                in_list = [ e[i1*batch_size : min( (i1+1)*batch_size, N ) ] for e in x ] + [0.]
+                batch_y_out = self._f_predict( *in_list )
+                for j1 in xrange(n_out_nodes):
+                    y_out[j1].append( batch_y_out[j1] )
+                    
+            # get y_out
+            y_out = [ np.concatenate(e, axis=0) for e in y_out ]
         
         return y_out
         
