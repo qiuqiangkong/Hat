@@ -61,10 +61,10 @@ def memory_usage( x, y ):
 # sub breadth first traversal
 def BFT_sub( curr_layer, id_list, layer_list ):
     need_visits = []
-    for layer in curr_layer.nexts:
-        if ( layer.id not in id_list ) and ( layer is not [] ):
+    for layer in curr_layer.nexts_:
+        if ( layer.id_ not in id_list ) and ( layer is not [] ):
             need_visits.append( layer )
-            id_list.append( layer.id )
+            id_list.append( layer.id_ )
             layer_list.append( layer )    
             
     for layer in need_visits:
@@ -80,13 +80,13 @@ def BFT( in_layers ):
     need_visits = []    # list of layer
     
     for layer in in_layers:
-        id_list.append( layer.id )
+        id_list.append( layer.id_ )
         layer_list.append( layer )
         
-        for next_layer in layer.nexts:
+        for next_layer in layer.nexts_:
             if ( next_layer not in need_visits ) and ( next_layer is not [] ):
                 need_visits.append( next_layer )
-                id_list.append( next_layer.id )
+                id_list.append( next_layer.id_ )
                 layer_list.append( next_layer )
 
     # sub BFT

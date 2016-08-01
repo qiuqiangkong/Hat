@@ -3,10 +3,12 @@ SUMMARY:  Callbacks, to validate, save model every several epochs
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.14
 Modified: 2016.07.25 Modify evalute() to batch version
+          2016.07.29 Fix bug in _evaluate
 --------------------------------------
 '''
 import backend as K
 import objectives as obj
+import serializations
 import metrics
 from abc import ABCMeta, abstractmethod
 import pickle
@@ -104,8 +106,8 @@ class Validation( Callback ):
     Here destroy md's closure property here for convenience. Do not use any private attributes and set method of md. 
     '''
     def compile( self, md ):
-        input_nodes = md.in_nodes
-        self._f_pred = K.function_no_given( input_nodes, md.tr_phase_node, md.out_nodes )
+        input_nodes = md.in_nodes_
+        self._f_pred = K.function_no_given( input_nodes, md.tr_phase_node_, md.out_nodes_ )
         self._md = md
         
  
@@ -116,8 +118,8 @@ class Validation( Callback ):
         if self._is_te: self._evaluate( self._te_x, self._te_y, 'te' )
         t2 = time.time()
         self._r['cb_time'] += t2 - t1
-        self._r['epoch'] = self._md.epoch
-        self._r['tr_time'] = self._md.tr_time
+        self._r['epoch'] = self._md.epoch_
+        self._r['tr_time'] = self._md.tr_time_
         pickle.dump( self._r, open( self._dump_path, 'wb' ) )
         print
         
@@ -135,7 +137,7 @@ class Validation( Callback ):
             else:             
                 N = len(x[0])
                 batch_num = int( np.ceil( float(N) / self._batch_size ) )
-                y_out = [[]] * n_out_nodes
+                y_out = [ [] for e in y ]
                 for i1 in xrange( batch_num ):
                     in_list = [ e[i1*self._batch_size : min( (i1+1)*self._batch_size, N ) ] for e in x ] + [0.]
                     batch_y_out = self._f_pred( *in_list )
@@ -144,7 +146,7 @@ class Validation( Callback ):
                     
                     # print process
                     self._print_progress( batch_num, i1 )
-                        
+
                 # get y_out
                 y_out = [ np.concatenate(e, axis=0) for e in y_out ]
                 
@@ -184,11 +186,14 @@ class SaveModel( Callback ):
         self._md = md
         
     def call( self ):
-        dump_path = self._dump_fd + '/md' + str(self._md.epoch) + '.p'
+        dump_path = self._dump_fd + '/md' + str(self._md.epoch_) + '.p'
+        serializations.save( self._md, dump_path )
+        '''
         try:
-            pickle.dump( self._md, open( dump_path, 'wb' ) )
+            serializations.save( self._md, dump_path )
         except:
-            assert False, "Is the model too large to save or did you create a folder named '" + self._dump_fd + "'?"
+            assert False, "Fail to save. Is the model too large? Did you implement info_(), load_from_info() correctly in your won layer?  Did you create a folder named '" + self._dump_fd + "'?"
+        '''
             
         
 class Debug( Callback ):

@@ -34,11 +34,11 @@ Acoustics, Speech and Signal Processing, IEEE Transactions on 37.3 (1989): 328-3
 class Convolution1D( Layer ):
     def __init__( self, n_outfmaps, len_filter, act, init_type='uniform', reg=None, name=None ):
         super( Convolution1D, self ).__init__( name )
-        self._n_outfmaps = n_outfmaps
-        self._len_filter = len_filter
-        self._act = act
-        self._init_type = init_type
-        self._reg = reg
+        self._n_outfmaps_ = n_outfmaps
+        self._len_filter_ = len_filter
+        self._act_ = act
+        self._init_type_ = init_type
+        self._reg_ = reg
         
     def __call__( self, in_layers ):
         # only one input layer is allowed
@@ -53,26 +53,26 @@ class Convolution1D( Layer ):
         [batch_size, n_time, n_in] = in_shape
         
         # do convolution
-        filter_shape = ( self._n_outfmaps, 1, self._len_filter, n_in )
-        self._W = initializations.get( self._init_type )( filter_shape, name=str(self._name)+'_W' )
-        self._b = initializations.zeros( self._n_outfmaps, name=str(self._name)+'_b' )
+        filter_shape = ( self._n_outfmaps_, 1, self._len_filter_, n_in )
+        self._W_ = initializations.get( self._init_type_ )( filter_shape, name=str(self._name_)+'_W' )
+        self._b_ = initializations.zeros( self._n_outfmaps_, name=str(self._name_)+'_b' )
         
         # shape(lin_out): (batch_size, n_outfmaps, n_time, 1)
-        lin_out = K.conv2d( input.dimshuffle(0,'x',1,2), self._W, border_mode='valid' ) + self._b.dimshuffle('x', 0, 'x', 'x')
+        lin_out = K.conv2d( input.dimshuffle(0,'x',1,2), self._W_, border_mode='valid' ) + self._b_.dimshuffle('x', 0, 'x', 'x')
         
         # shape(lin_out): (batch_size, n_time, n_outfmaps)
         lin_out = lin_out.dimshuffle(0,2,1,3).flatten(3)
         
         # activation function
-        output = activations.get( self._act )( lin_out )
+        output = activations.get( self._act_ )( lin_out )
         
         # assign attributes
-        self._prevs = in_layers
-        self._nexts = []
-        self._out_shape = ( None, conv_out_len(n_time, self._len_filter, border_mode='valid'), self._n_outfmaps )
-        self._output = output
-        self._params = [ self._W, self._b ]
-        self._reg_value = self._get_reg()
+        self._prevs_ = in_layers
+        self._nexts_ = []
+        self._out_shape_ = ( None, conv_out_len(n_time, self._len_filter_, border_mode='valid'), self._n_outfmaps_ )
+        self._output_ = output
+        self._params_ = [ self._W_, self._b_ ]
+        self._reg_value_ = self._get_reg()
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
@@ -84,25 +84,25 @@ class Convolution1D( Layer ):
         if self._reg is None:
             _reg_value = 0.
         else:
-            _reg_value = self._reg.reg_value( [ self._W ] )
+            _reg_value = self._reg_.reg_value( [ self._W_ ] )
         return _reg_value
         
     def W():
-        return self._W
+        return self._W_
         
     def b():
-        return self._b
+        return self._b_
 
 class Convolution2D( Layer ):
     def __init__( self, n_outfmaps, n_row, n_col, act, init_type='uniform', border_mode='full', reg=None, name=None ):
         super( Convolution2D, self ).__init__( name )
-        self._n_outfmaps = n_outfmaps
-        self._n_row = n_row
-        self._n_col = n_col
-        self._act = act
-        self._init_type = init_type
-        self._border_mode = border_mode
-        self._reg = reg
+        self._n_outfmaps_ = n_outfmaps
+        self._n_row_ = n_row
+        self._n_col_ = n_col
+        self._act_ = act
+        self._init_type_ = init_type
+        self._border_mode_ = border_mode
+        self._reg_ = reg
         
     def __call__( self, in_layers ):
         # only one input layer is allowed
@@ -111,27 +111,27 @@ class Convolution2D( Layer ):
         in_layer = in_layers[0]
         
         # input dim must be 4
-        in_shape = in_layer.out_shape
-        input = in_layer.output
+        in_shape = in_layer.out_shape_
+        input = in_layer.output_
         assert len(in_shape)==4     # (batch_size, n_infmaps, height, width)
         [batch_size, n_infmaps, height, width] = in_shape
         
         # do convolution
-        filter_shape = ( self._n_outfmaps, n_infmaps, self._n_row, self._n_col )
-        self._W = initializations.get( self._init_type )( filter_shape, name=str(self._name)+'_W' )
-        self._b = initializations.zeros( self._n_outfmaps, name=str(self._name)+'_b' )
-        lin_out = K.conv2d( input, self._W, border_mode=self._border_mode ) + self._b.dimshuffle('x', 0, 'x', 'x')
-        output = activations.get( self._act )( lin_out )
+        filter_shape = ( self._n_outfmaps_, n_infmaps, self._n_row_, self._n_col_ )
+        self._W_ = initializations.get( self._init_type_ )( filter_shape, name=str(self._name_)+'_W' )
+        self._b_ = initializations.zeros( self._n_outfmaps_, name=str(self._name_)+'_b' )
+        lin_out = K.conv2d( input, self._W_, border_mode=self._border_mode_ ) + self._b_.dimshuffle('x', 0, 'x', 'x')
+        output = activations.get( self._act_ )( lin_out )
         
         # assign attributes
-        self._prevs = in_layers
-        self._nexts = []
-        self._out_shape = ( None, self._n_outfmaps, 
-                            conv_out_len(height, self._n_row, self._border_mode), 
-                            conv_out_len(width, self._n_col, self._border_mode) )
-        self._output = output
-        self._params = [ self._W, self._b ]
-        self._reg_value = self._get_reg()
+        self._prevs_ = in_layers
+        self._nexts_ = []
+        self._out_shape_ = ( None, self._n_outfmaps_, 
+                            conv_out_len(height, self._n_row_, self._border_mode_), 
+                            conv_out_len(width, self._n_col_, self._border_mode_) )
+        self._output_ = output
+        self._params_ = [ self._W_, self._b_ ]
+        self._reg_value_ = self._get_reg()
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
@@ -140,14 +140,38 @@ class Convolution2D( Layer ):
         
     # get regularization
     def _get_reg( self ):
-        if self._reg is None:
+        if self._reg_ is None:
             _reg_value = 0.
         else:
-            _reg_value = self._reg.reg_value( [ self._W ] )
+            _reg_value = self._reg_.reg_value( [ self._W_ ] )
         return _reg_value
+    
+    @property    
+    def W_( self ):
+        return K.get_value( self._W_ )
         
-    def W():
-        return self._W
+    @property
+    def b_( self ):
+        return K.get_value( self._b_ )
         
-    def b():
-        return self._b
+    # layer's info
+    @property
+    def info_( self ):
+        dict = { 'id': self._id_, 
+                 'n_outfmaps': self._n_outfmaps_, 
+                 'n_row': self._n_row_, 
+                 'n_col': self._n_col_, 
+                 'act': self._act_, 
+                 'init_type': self._init_type_,
+                 'border_mode': self._border_mode_, 
+                 'reg': self._reg_, 
+                 'W': self.W_, 
+                 'b': self.b_, 
+                 'name': self._name_ }
+        return dict
+           
+    # load layer from info
+    @classmethod
+    def load_from_info( cls, info ):
+        layer = cls( name=info['name'] )
+        return layer

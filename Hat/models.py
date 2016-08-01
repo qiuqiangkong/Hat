@@ -3,11 +3,13 @@ SUMMARY:  Build Model
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.01
 Modified: 2016.07.25 Modify fit() to batch version
+          2016.07.29 Replace [[]] * n with [ [] for e in self._out_nodes ]
 --------------------------------------
 '''
 import sys
 from supports import to_list, BFT, shuffle, memory_usage
 from optimizers import *
+from globals import reset_id_to_zero
 import objectives as obj
 import backend as K
 import time
@@ -18,77 +20,82 @@ import pickle
 
 class Base( object ):
     def __init__( self, in_layers ):
-        in_layers = to_list( in_layers )
+        # reset global id
+        reset_id_to_zero()
+        
         # inlayers
-        self._in_layers = in_layers
-        self._in_nodes = [ layer.output for layer in self._in_layers ]
+        in_layers = to_list( in_layers )
+        self._in_layers_ = in_layers
+        self._in_nodes_ = [ layer.output_ for layer in self._in_layers_ ]
         
         # find all nodes using BFT
-        self._id_list, self._layer_list = BFT( self._in_layers )
+        self._id_list_, self._layer_list_ = BFT( self._in_layers_ )
         
         # get params by traveling all layers
-        self._params = []
-        for layer in self._layer_list:
-            self._params += layer.params
+        self._params_ = []
+        for layer in self._layer_list_:
+            self._params_ += layer.params_
             
         # sum regs by traveling all layers
-        self._reg_value = 0.
-        for layer in self._layer_list:
-            self._reg_value += layer.reg_value
+        self._reg_value_ = 0.
+        for layer in self._layer_list_:
+            self._reg_value_ += layer.reg_value_
             
         # tr_phase_node
-        self._tr_phase_node = K.common_tr_phase_node
+        self._tr_phase_node_ = K.common_tr_phase_node
             
         # time
-        self._tr_time = 0
-        self._epoch = 0
+        self._tr_time_ = 0.
+        self._epoch_ = 0
     
     # print progress on screen
-    def print_progress( self, epoch, batch_num, curr_batch_num ):
+    def _print_progress( self, epoch, batch_num, curr_batch_num ):
         sys.stdout.write("%d-th epoch %d%%   \r" % ( epoch, float(curr_batch_num)/float(batch_num)*100 ) )
         sys.stdout.flush()
+        
+    @property
+    def in_layers_( self ):
+        return self._in_layers_
+        
     
-    # dump model    
-    def dump( self, path ):
-        pickle.dump( self, open( path, 'wb' ) )
+    @property
+    def in_nodes_( self ):
+        return self._in_nodes_
         
     @property
-    def in_nodes( self ):
-        return self._in_nodes
+    def out_nodes_( self ):
+        return self._out_nodes_
         
     @property
-    def out_nodes( self ):
-        return self._out_nodes
+    def gt_nodes_( self ):
+        return self._gt_nodes_
+    
+    
+    @property
+    def epoch_( self ):
+        return self._epoch_
         
     @property
-    def gt_nodes( self ):
-        return self._gt_nodes
+    def tr_time_( self ):
+        return self._tr_time_
         
     @property
-    def epoch( self ):
-        return self._epoch
-        
-    @property
-    def tr_time( self ):
-        return self._tr_time
-        
-    @property
-    def tr_phase_node( self ):
-        return self._tr_phase_node
+    def tr_phase_node_( self ):
+        return self._tr_phase_node_
         
     def summary( self ):
         print '---------- summary -----------'
         f = "{0:<20} {1:<20} {2:<20}"
         print f.format( 'layer_name', 'out_shape', 'n_params' )
-        for layer in self._layer_list:
+        for layer in self._layer_list_:
             n_params = self._num_of_params( layer )
-            print f.format( layer.name, str(layer.out_shape), str(n_params) )
+            print f.format( layer.name_, str(layer.out_shape_), str(n_params) )
         print 
             
     # get number of params in a layer
     def _num_of_params( self, layer ):
         n_params = 0
-        for param in layer.params:
+        for param in layer.params_:
             n_params += np.prod( K.get_value( param ).shape )
         return n_params
         
@@ -103,22 +110,22 @@ class Base( object ):
         G = nx.DiGraph()
         
         # add node
-        for id in self._id_list:
+        for id in self._id_list_:
             G.add_node( id )
         
         # add connection
-        for layer in self._layer_list:
-            for next in layer.nexts:
-                G.add_edge( layer.id, next.id )
+        for layer in self._layer_list_:
+            for next in layer.nexts_:
+                G.add_edge( layer.id_, next.id_ )
                 
         # pos & labels
         pos = nx.spring_layout(G)
         labels = {}
-        for layer in self._layer_list:
+        for layer in self._layer_list_:
             if hasattr( layer, '_act' ):
-                labels[layer.id] = layer._name
+                labels[layer.id_] = layer._name_
             else:
-                labels[layer.id] = layer._name
+                labels[layer.id_] = layer._name_
 
         # plot
         nx.draw_networkx_nodes( G , pos, node_size=800, node_color='r', node_shape='o' )
@@ -130,18 +137,21 @@ class Base( object ):
 Supervised Model
 '''
 class Model( Base ):
-    def __init__( self, in_layers, out_layers, obj_weights=[1.] ):
+    def __init__( self, in_layers, out_layers, obj_weights=None ):
         super( Model, self ).__init__( in_layers )
+
+        # default obj_weights
+        if obj_weights is None: obj_weights = [1. / len(out_layers)] * len(out_layers)
         assert len(out_layers)==len(obj_weights), "num of out_layers must equal num of obj_weights!"
         
         # out layers
         out_layers = to_list( out_layers )
-        self._out_layers = out_layers
-        self._obj_weights = obj_weights
+        self._out_layers_ = out_layers
+        self._obj_weights_ = obj_weights
         
         # out_nodes & create gt_nodes
-        self._out_nodes = [ layer.output for layer in self._out_layers ]
-        self._gt_nodes = [ K.placeholder( len(layer.out_shape) ) for layer in self._out_layers ]
+        self._out_nodes_ = [ layer.output_ for layer in self._out_layers_ ]
+        self._gt_nodes_ = [ K.placeholder( len(layer.out_shape_) ) for layer in self._out_layers_ ]
 
     '''
     memory mode 0 (default): transfer from cpu to gpu every time, 1: store all data in gpu
@@ -166,17 +176,17 @@ class Model( Base ):
         
         # loss
         loss_node = sum( [ obj.get( loss_type )( pred_node, gt_node ) * w 
-                        for pred_node, gt_node, w in zip( self._out_nodes, self._gt_nodes, self._obj_weights ) ] )
+                        for pred_node, gt_node, w in zip( self._out_nodes_, self._gt_nodes_, self._obj_weights_ ) ] )
         
         # gradient
-        gparams = K.grad( loss_node + self._reg_value, self._params )
+        gparams = K.grad( loss_node + self._reg_value_, self._params_ )
         
         # todo clip gradient
         if clip is not None:
             gparams = [ K.clip( gparam, -clip, clip ) for gparam in gparams ]
         
         # gradient based opt
-        updates = optimizer.get_updates( self._params, gparams )
+        updates = optimizer.get_updates( self._params_, gparams )
         
         # compile for callback
         if callbacks is not None:
@@ -186,9 +196,9 @@ class Model( Base ):
         
         if memory_mode==0:
             # compile model
-            input_nodes = self._in_nodes + self._gt_nodes
+            input_nodes = self._in_nodes_ + self._gt_nodes_
             output_nodes = [ loss_node ]
-            f = K.function_no_given( input_nodes, self._tr_phase_node, output_nodes, updates )
+            f = K.function_no_given( input_nodes, self._tr_phase_node_, output_nodes, updates )
             
         if memory_mode==1:
             # store data in shared memory (GPU)
@@ -196,21 +206,20 @@ class Model( Base ):
             sh_y = [ K.sh_variable( value=e, name='tr_y' ) for e in y ]
             
             # compile model
-            input_nodes = self._in_nodes + self._gt_nodes
+            input_nodes = self._in_nodes_ + self._gt_nodes_
             output_nodes = [ loss_node ]
             given_nodes = sh_x + sh_y
-            f = K.function_given( batch_size, input_nodes, self._tr_phase_node, output_nodes, given_nodes, updates )
+            f = K.function_given( batch_size, input_nodes, self._tr_phase_node_, output_nodes, given_nodes, updates )
 
         # train
         N = len( x[0] )
         batch_num = int( np.ceil( float(N) / batch_size ) )
-        while self._epoch < n_epoch:
+        while self._epoch_ < n_epoch:
             # callback
             for callback in callbacks:
-                if ( self._epoch % callback.call_freq == 0 ):
+                if ( self._epoch_ % callback.call_freq == 0 ):
                     callback.call()
-            
-            print
+                    
             # train
             t1 = time.time()
             for i2 in xrange(batch_num):
@@ -221,10 +230,10 @@ class Model( Base ):
                     loss = f( *in_list )[0]                     # training phase          
                 if memory_mode==1:
                     loss = f(i2, 1.)[0]                     # training phase          
-                if verbose: self.print_progress( self._epoch, batch_num, i2 )
+                if verbose: self._print_progress( self._epoch_, batch_num, i2 )
             t2 = time.time()
-            self._tr_time += (t2 - t1)
-            self._epoch += 1
+            self._tr_time_ += (t2 - t1)
+            self._epoch_ += 1
             print '\n', 'train time: ', "%.2f " % (t2-t1), 's'          # print an empty line
 
     def predict( self, x, batch_size=100 ):
@@ -234,10 +243,10 @@ class Model( Base ):
         
         # compile predict model
         if not hasattr( self, '_f_predict' ):
-            if len( self._out_nodes )==1:   # if only 1 out_node, then return it directly instead of list
-                self._f_predict = K.function_no_given( self._in_nodes, self._tr_phase_node, self._out_nodes[0] )
+            if len( self._out_nodes_ )==1:   # if only 1 out_node, then return it directly instead of list
+                self._f_predict = K.function_no_given( self._in_nodes_, self._tr_phase_node_, self._out_nodes_[0] )
             else:
-                self._f_predict = K.function_no_given( self._in_nodes, self._tr_phase_node, self._out_nodes )
+                self._f_predict = K.function_no_given( self._in_nodes_, self._tr_phase_node_, self._out_nodes_ )
         
         # do predict
         # put all data in GPU
@@ -248,8 +257,8 @@ class Model( Base ):
         else:
             N = len(x[0])
             batch_num = int( np.ceil( float(N) / batch_size ) )
-            n_out_nodes = len( self._out_nodes )
-            y_out = [[]] * n_out_nodes
+            n_out_nodes = len( self._out_nodes_ )
+            y_out = [ [] for e in self._out_nodes_ ]
             for i1 in xrange( batch_num ):
                 in_list = [ e[i1*batch_size : min( (i1+1)*batch_size, N ) ] for e in x ] + [0.]
                 batch_y_out = self._f_predict( *in_list )
@@ -261,18 +270,30 @@ class Model( Base ):
         
         return y_out
         
+    @property
+    def info_( self ):
+        dict = { 'obj_weights': self._obj_weights_ }
+        return dict
+        
+    @classmethod
+    def load_from_info( cls, in_layers, out_layers, info ):
+        md = cls( in_layers, out_layers, info['obj_weights'] )
+        return md
+        
         
 class Sequential( Model ):
     def __init__( self ):
-        self._layer_seq = []
+        self._layer_seq_ = []
         
     def add( self, layer ):
-        self._layer_seq.append( layer )
-        if len( self._layer_seq ) > 1:
-            self._layer_seq[-1].__call__( self._layer_seq[-2] )
-            
+        self._layer_seq_.append( layer )
+        if len( self._layer_seq_ ) > 1:
+            self._layer_seq_[-1].__call__( self._layer_seq_[-2] )
+
+    def combine( self ):
         # regenerate model when add a new layer
-        super(Sequential, self).__init__( [ self._layer_seq[0] ], [ self._layer_seq[-1] ]  )
+        md = Model( [ self._layer_seq_[0] ], [ self._layer_seq_[-1] ] )
+        return md
     
 class Pretrain():
     pass
