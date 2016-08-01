@@ -46,6 +46,7 @@ class Convolution1D( Layer ):
         assert len(in_layers)==1, "The input of Dense can only be one layer!"
         in_layer = in_layers[0]
         
+        
         # input dim must be 3
         in_shape = in_layer.out_shape
         input = in_layer.output
@@ -94,7 +95,7 @@ class Convolution1D( Layer ):
         return self._b_
 
 class Convolution2D( Layer ):
-    def __init__( self, n_outfmaps, n_row, n_col, act, init_type='uniform', border_mode='full', reg=None, name=None ):
+    def __init__( self, n_outfmaps, n_row, n_col, act, init_type='uniform', border_mode='full', reg=None, W_init=None, b_init=None, name=None ):
         super( Convolution2D, self ).__init__( name )
         self._n_outfmaps_ = n_outfmaps
         self._n_row_ = n_row
@@ -103,6 +104,8 @@ class Convolution2D( Layer ):
         self._init_type_ = init_type
         self._border_mode_ = border_mode
         self._reg_ = reg
+        self._W_init_ = W_init
+        self._b_init_ = b_init
         
     def __call__( self, in_layers ):
         # only one input layer is allowed
@@ -118,8 +121,16 @@ class Convolution2D( Layer ):
         
         # do convolution
         filter_shape = ( self._n_outfmaps_, n_infmaps, self._n_row_, self._n_col_ )
-        self._W_ = initializations.get( self._init_type_ )( filter_shape, name=str(self._name_)+'_W' )
-        self._b_ = initializations.zeros( self._n_outfmaps_, name=str(self._name_)+'_b' )
+        if self._W_init_ is None:
+            self._W_ = initializations.get( self._init_type_ )( filter_shape, name=str(self._name_)+'_W' )
+        else:
+            self._W_ = self._W_init_
+            
+        if self._b_init_ is None:
+            self._b_ = initializations.zeros( self._n_outfmaps_, name=str(self._name_)+'_b' )
+        else:
+            self._b_ = self._b_init_
+            
         lin_out = K.conv2d( input, self._W_, border_mode=self._border_mode_ ) + self._b_.dimshuffle('x', 0, 'x', 'x')
         output = activations.get( self._act_ )( lin_out )
         
@@ -173,5 +184,6 @@ class Convolution2D( Layer ):
     # load layer from info
     @classmethod
     def load_from_info( cls, info ):
-        layer = cls( name=info['name'] )
+        layer = cls( n_outfmaps=info['n_outfmaps'], n_row=info['n_row'], n_col=info['n_col'], act=info['act'], 
+                     init_type=info['init_type'], border_mode=info['border_mode'], reg=info['reg'], name=info['name'] )
         return layer

@@ -8,6 +8,8 @@ Modified: -
 from supports import BFT
 import cPickle
 from layers.core import *
+from layers.cnn import *
+from layers.pool import *
 from models import *
 
 ### save model
@@ -93,7 +95,8 @@ def load( path ):
     for id in xrange( len( atom_list ) ):
         atom = _find_atom_( atom_list, id )
         LayerClass = globals().get( atom['class_name'] )
-        
+        assert LayerClass is not None, "Try import '" + atom['class_name'] + "' to serializations.py!"
+
         if not atom['prev_ids']:
             layer = LayerClass.load_from_info( atom['info'] )
         else:

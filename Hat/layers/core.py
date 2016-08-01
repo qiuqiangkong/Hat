@@ -116,6 +116,21 @@ class Lambda( Layer ):
         return self
         
     
+    # model's info & params
+    @property
+    def info_( self ):
+        dict = { 'id': self._id_, 
+                 'fn': self._fn, 
+                 'kwargs': self._kwargs_, 
+                 'name': self._name_, }
+        return dict
+        
+    # load layer from info
+    @classmethod
+    def load_from_info( cls, info ):
+        layer = cls( info['fn'], info['name'], **info['kwargs'] )
+        return layer
+    
         
 class InputLayer( Layer ):
     def __init__( self, in_shape, name=None ):
@@ -142,6 +157,7 @@ class InputLayer( Layer ):
                  'in_shape': self._in_shape_, }
         return dict
         
+    # load layer from info
     @classmethod
     def load_from_info( cls, info ):
         layer = cls( in_shape=info['in_shape'], name=info['name'] )

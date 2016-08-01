@@ -55,6 +55,21 @@ class MaxPool2D( Lambda ):
     def __init__( self, name=None, **kwargs ):
         assert 'pool_size' in kwargs, "You must specifiy pool_size kwarg in MaxPool2D!"
         super( MaxPool2D, self ).__init__( _max_pool_2d, name, **kwargs )
+    
+    # model's info & params
+    @property
+    def info_( self ):
+        dict = { 'id': self._id_, 
+                 'kwargs': self._kwargs_, 
+                 'name': self._name_, }
+        return dict
+        
+    # load layer from info
+    @classmethod
+    def load_from_info( cls, info ):
+        layer = cls( info['name'], **info['kwargs'] )
+        return layer
+    
 
 def _pool_2d( input, in_shape, **kwargs ):
     assert len(in_shape)==4, "shape.ndim should be 4, shape:(batch_size, n_infmaps, height, width), yours is " + str(in_shape)
