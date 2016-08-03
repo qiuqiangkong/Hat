@@ -8,6 +8,8 @@ Created:  2016.05.18
 Modified: 2016.07.26 Make code clearer
 --------------------------------------
 '''
+import sys
+sys.path.append('/user/HS229/qk00006/my_code2015.5-/python/Hat')
 import pickle
 import numpy as np
 np.random.seed(1515)
@@ -43,18 +45,20 @@ te_y = sparse_to_categorical(te_y, n_out)
 
 ### Build model
 act = 'relu'
-md = Sequential()
-md.add( InputLayer( in_shape=(1,28,28) ) )
-md.add( Convolution2D( n_outfmaps=32, n_row=3, n_col=3, act='relu') )
-md.add( MaxPool2D( pool_size=(2,2) ) )
-md.add( Convolution2D( n_outfmaps=32, n_row=3, n_col=3, act = 'relu') )
-md.add( MaxPool2D( pool_size=(2,2) ) )
-md.add( Dropout( 0.2 ) )
-md.add( Flatten() )
-md.add( Dense( n_hid, act = 'relu' ) )
-md.add( Dropout( 0.5 ) )
-md.add( Dense( n_hid, act = 'relu' ) )
-md.add( Dense( n_out, act='softmax' ) )
+seq = Sequential()
+seq.add( InputLayer( in_shape=(1,28,28) ) )
+seq.add( Convolution2D( n_outfmaps=32, n_row=3, n_col=3, act='relu') )
+seq.add( MaxPool2D( pool_size=(2,2) ) )
+seq.add( Convolution2D( n_outfmaps=32, n_row=3, n_col=3, act = 'relu') )
+seq.add( MaxPool2D( pool_size=(2,2) ) )
+seq.add( Dropout( 0.2 ) )
+seq.add( Flatten() )
+seq.add( Dense( n_hid, act = 'relu' ) )
+seq.add( Dropout( 0.5 ) )
+seq.add( Dense( n_hid, act = 'relu' ) )
+seq.add( Dense( n_out, act='softmax' ) )
+
+md = seq.combine()
 
 # print summary info of model
 md.summary()

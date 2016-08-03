@@ -8,6 +8,8 @@ Modified: 2016.05.25 Write annotation
           2016.07.26 Tiny adjust
 --------------------------------------
 '''
+import sys
+sys.path.append('/user/HS229/qk00006/my_code2015.5-/python/Hat')
 import numpy as np
 np.random.seed(1515)
 import os
@@ -33,13 +35,14 @@ va_y = sparse_to_categorical(va_y, n_out)
 te_y = sparse_to_categorical(te_y, n_out)
 
 ### Build model
-md = Sequential()
-md.add( InputLayer( n_in ) )
-md.add( Dense( n_hid, act='relu' ) )
-md.add( Dropout( p_drop=0.2 ) )
-md.add( Dense( n_hid, act='relu' ) )
-md.add( Dropout( p_drop=0.2 ) )
-md.add( Dense( n_out, act='softmax' ) )
+seq = Sequential()
+seq.add( InputLayer( n_in ) )
+seq.add( Dense( n_hid, act='relu' ) )
+seq.add( Dropout( p_drop=0.2 ) )
+seq.add( Dense( n_hid, act='relu' ) )
+seq.add( Dropout( p_drop=0.2 ) )
+seq.add( Dense( n_out, act='softmax' ) )
+md = seq.combine()
 
 # print summary info of model
 md.summary()
