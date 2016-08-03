@@ -10,6 +10,7 @@ import cPickle
 from layers.core import *
 from layers.cnn import *
 from layers.pool import *
+from layers.rnn import *
 from models import *
 
 ### save model
@@ -22,9 +23,6 @@ def save( md, path ):
     atom_list = []
     for layer in layer_list:
         atom = {}
-        
-        # add class name to atom
-        atom['class_name'] = layer.__class__.__name__
         
         # add data segment to atom
         atom['info'] = layer.info_
@@ -94,7 +92,7 @@ def load( path ):
     layer_list = []
     for id in xrange( len( atom_list ) ):
         atom = _find_atom_( atom_list, id )
-        LayerClass = globals().get( atom['class_name'] )
+        LayerClass = globals().get( atom['info']['class_name'] )
         assert LayerClass is not None, "Try import '" + atom['class_name'] + "' to serializations.py!"
 
         if not atom['prev_ids']:

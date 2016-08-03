@@ -14,19 +14,20 @@ from ..supports import to_list, get_mask
 import numpy as np
 from abc import ABCMeta, abstractmethod, abstractproperty
 
-
+###
+# Base class of all variations of RNN
 class RnnBase( Layer ):
     __metaclass__ = ABCMeta
     
     def __init__( self, n_out, act, init_type, reg, return_sequence, go_backwards, masking, name ):
         super( RnnBase, self ).__init__( name )
-        self._n_out = n_out
-        self._act = act
-        self._init_type = init_type
-        self._reg = reg
-        self._return_sequence = return_sequence
-        self._go_backwards = go_backwards
-        self._masking = masking
+        self._n_out_ = n_out
+        self._act_ = act
+        self._init_type_ = init_type
+        self._reg_ = reg
+        self._return_sequence_ = return_sequence
+        self._go_backwards_ = go_backwards
+        self._masking_ = masking
     
     @abstractmethod
     def _step( self ):
@@ -37,66 +38,101 @@ class RnnBase( Layer ):
         pass
         
 '''
-Simple Rnn layer. Using random matrix to init H is better than eye matrix
+Simple Rnn layer. 
+(Using random matrix to init H is better than eye matrix)
 '''
 class SimpleRnn( RnnBase ):
-    def __init__( self, n_out, act, init_type='uniform', reg=None, return_sequence=True, go_backwards=False, masking=False, name=None ):
+    def __init__( self, n_out, act, init_type='uniform', reg=None,
+                  W_init=None, H_init=None, b_init=None, 
+                  return_sequence=True, go_backwards=False, masking=False, name=None ):
+        
         super( SimpleRnn, self ).__init__( n_out, act, init_type, reg, return_sequence, go_backwards, masking, name )
+        self._W_init_ = W_init
+        self._H_init_ = H_init
+        self._b_init_ = b_init
         
     def __call__( self, in_layers ):
         in_layers = to_list( in_layers )
         assert len(in_layers)==1, "The input of Rnn can only be one layer!"
         in_layer = in_layers[0]
         
-        in_shape = in_layer.out_shape
-        input = in_layer.output
+        in_shape = in_layer.out_shape_
+        input = in_layer.output_
         assert len(in_shape)==3, "The dim of input must be 3! Your shape is " + str(in_shape)
         [ batch_size, n_time, n_in ] = in_shape
         
         # reverse data
-        if self._go_backwards: input = input[::-1]
+        if self._go_backwards_: input = input[::-1]
         
-        # parameters
-        self._W = initializations.get( self._init_type )( (n_in, self._n_out), name=str(self._name)+'_W' )
-        self._H = initializations.get( self._init_type )( (self._n_out, self._n_out), name=str(self._name)+'_H' )
-        #self._H = initializations.get( 'eye' )( self._n_out, name=str(self._name)+'_H' )
-        self._b = initializations.get( 'zeros' )( (self._n_out), name=str(self._name)+'_b' )
+        # ------ init parameters ------
+        # init W
+        if self._W_init_ is None:
+            self._W_ = initializations.get( self._init_type_ )( (n_in, self._n_out_), name=str(self._name_)+'_W' )
+        else:
+            self._W_ = K.sh_variable( self._W_init_ )
+
+        # init H
+        if self._H_init_ is None:
+            self._H_ = initializations.get( self._init_type_ )( (self._n_out_, self._n_out_), name=str(self._name_)+'_H' )
+        else:
+            self._H_ = K.sh_variable( self._H_init_ )
+            
+        # init b
+        if self._b_init_ is None:
+            self._b_ = initializations.get( 'zeros' )( (self._n_out_), name=str(self._name_)+'_b' )
+        else:
+            self._b_ = K.sh_variable( self._b_init_ )
      
+        # ------------------------------
+        
         # scan
         output = self._scan( input )
         
         # mask
-        if self._masking==True:
+        if self._masking_==True:
             mask = get_mask( input )
             output *= mask[:,:,None]
         
         # if return_sequence=False only return the last value, size: batch_size*n_in
-        if self._return_sequence is False:
+        if self._return_sequence_ is False:
             output = output[:,-1,:].flatten(2)
-            out_shape = (None, self._n_out)
+            out_shape = (None, self._n_out_)
         else:
-            out_shape = (None, n_time, self._n_out)
+            out_shape = (None, n_time, self._n_out_)
         
         # assign attributes
-        self._prevs = in_layers
-        self._nexts = []
-        self._out_shape = out_shape
-        self._output = output
-        self._params = [ self._W, self._b, self._H ]
-        self._reg_value = self._get_reg()
+        self._prevs_ = in_layers
+        self._nexts_ = []
+        self._out_shape_ = out_shape
+        self._output_ = output
+        self._params_ = [ self._W_, self._b_, self._H_ ]
+        self._reg_value_ = self._get_reg()
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
-        self.check_attributes()                             # check if all attributes are implemented
+        self._check_attributes()                             # check if all attributes are implemented
         return self
+    
+    # ---------- Public attributes ----------
+    
+    @property
+    def W_( self ): return K.get_value( self._W_ )
         
+    @property
+    def H_( self ): return K.get_value( self._H_ )
+        
+    @property
+    def b_( self ): return K.get_value( self._b_ )
+        
+    # ---------- Private methods ----------
+    
     # size(input): batch_size*n_times*n_in
     def _scan( self, input ):
         assert input.ndim==3
         batch_size, n_times, n_in = input.shape
          
         # to use scan, dimshuffle input to shape: n_times*batch_size*n_in
-        results, update = K.scan( self._step, sequences=input.dimshuffle(1,0,2), outputs_info=[K.zeros((batch_size, self._n_out))] )
+        results, update = K.scan( self._step, sequences=input.dimshuffle(1,0,2), outputs_info=[K.zeros((batch_size, self._n_out_))] )
         
         # dimshuffle output back to shape: batch_size*n_times*n_in
         output = results.dimshuffle(1,0,2)
@@ -104,22 +140,74 @@ class SimpleRnn( RnnBase ):
     
     # size(x): batch_size*n_in, size(h_): batch_size*n_out
     def _step( self, x, h_ ):
-        lin_out = K.dot( x, self._W ) + K.dot( h_, self._H ) + self._b
-        h = activations.get( self._act )( lin_out )
+        lin_out = K.dot( x, self._W_ ) + K.dot( h_, self._H_ ) + self._b_
+        h = activations.get( self._act_ )( lin_out )
 
         return h
         
     # get regularization
     def _get_reg( self ):
-        if self._reg is None:
-            _reg_value = 0.
+        if self._reg_ is None:
+            _reg_value_ = 0.
         else:
-            _reg_value = self._reg.reg_value( [ self.W, self.H ] )
-        return _reg_value
+            _reg_value_ = self._reg_.reg_value( [ self.W, self.H ] )
+        return _reg_value_
         
+    # ---------- Public methods ----------
+    
+    # model's info & params
+    @property
+    def info_( self ):
+        dict = { 'id': self._id_, 
+                 'n_out': self._n_out_, 
+                 'act': self._act_, 
+                 'init_type': self._init_type_, 
+                 'reg': self._reg_, 
+                 'return_sequence': self._return_sequence_, 
+                 'go_backwards': self._go_backwards_, 
+                 'masking': self._masking_, 
+                 'name': self._name_, 
+                 'W': self.W_ , 
+                 'H': self.H_, 
+                 'b': self.b_, }
+        return dict
+           
+    # load layer from info
+    @classmethod
+    def load_from_info( cls, info ):
+        layer = cls( n_out=info['n_out'], act=info['act'], init_type=info['init_type'], 
+                     reg=info['reg'], W_init=info['W'], H_init=info['H'], b_init=info['b'], 
+                     return_sequence=info['return_sequence'], go_backwards=info['go_backwards'], 
+                     masking=info['masking'], name=info['name'] )
+        return layer
+    
+    # -------------------------------------
+        
+'''
+[1] Hochreiter, "Long short-term memory." (1997)
+[2] 
+'''
 class LSTM( RnnBase ):
-    def __init__( self, n_out, act, init_type='uniform', reg=None, return_sequence=True, go_backwards=False, masking=False, name=None ):
+    def __init__( self, n_out, act, init_type='uniform', reg=None, 
+                  Wg_init=None, Ug_init=None, bg_init=None, Wi_init=None, Ui_init=None, bi_init=None, 
+                  Wf_init=None, Uf_init=None, bf_init=None, Wo_init=None, Uo_init=None, bo_init=None, 
+                  return_sequence=True, go_backwards=False, masking=False, name=None ):
         super( LSTM, self ).__init__( n_out, act, init_type, reg, return_sequence, go_backwards, masking, name )
+        self._Wg_init_ = Wg_init
+        self._Ug_init_ = Ug_init
+        self._bg_init_ = bg_init
+        self._Wi_init_ = Wi_init
+        self._Ui_init_ = Ui_init
+        self._bi_init_ = bi_init
+        self._Wf_init_ = Wf_init
+        self._Uf_init_ = Uf_init
+        self._bf_init_ = bf_init
+        self._Wo_init_ = Wo_init
+        self._Uo_init_ = Uo_init
+        self._bo_init_ = bo_init
+        
+    
+            #return K.
         
     def __call__( self, in_layers ):
         in_layers = to_list( in_layers )
@@ -135,13 +223,38 @@ class LSTM( RnnBase ):
         # reverse data
         if self._go_backwards: input = input[::-1]
         
-        # parameters
-        self._Wg = initializations.get( self._init_type )( (n_in, self._n_out), name=str(self.id)+'_Wg' )
-        self._Ug = initializations.get( self._init_type )( (self._n_out, self._n_out), name=str(self.id)+'_Ug' )
-        self._bg = initializations.get( 'zeros' )( (self._n_out), name=str(self.id)+'_bg' )
-        self._Wi = initializations.get( self._init_type )( (n_in, self._n_out), name=str(self.id)+'_Wi' )
-        self._Ui = initializations.get( self._init_type )( (self._n_out, self._n_out), name=str(self.id)+'_Ui' )
-        self._bi = initializations.get( 'zeros' )( (self._n_out), name=str(self.id)+'_bi' )
+        # ------ init parameters ------
+        if self._Wg_init_ is None:
+            self._Wg_ = initializations.get( self._init_type )( (n_in, self._n_out), name=str(self.id)+'_Wg' )
+        else:
+            self._Wg_ = self._Wg_init_
+            
+        if self._Ug_init_ is None:
+            self._Ug_ = initializations.get( self._init_type )( (self._n_out, self._n_out), name=str(self.id)+'_Ug' )
+        else:
+            self._Ug_ = self._Ug_init_
+            
+        if self._bg_init_ is None:
+            self._bg_ = initializations.get( 'zeros' )( (self._n_out), name=str(self.id)+'_bg' )
+        else:
+            self._bg_ = self._bg_init_
+            
+        if self._Wi_init_ is None:
+            self._Wi_ = initializations.get( self._init_type )( (n_in, self._n_out), name=str(self.id)+'_Wi' )
+        else:
+            self._Wi_ = self._Wi_init_
+            
+        if self._Wi_init_ is None:
+            self._Ui_ = initializations.get( self._init_type )( (self._n_out, self._n_out), name=str(self.id)+'_Ui' )
+        else:
+            self._Ui_ = self._Ui_init_
+            
+        if self._bi_init_ is None:
+            self._bi_ = initializations.get( 'zeros' )( (self._n_out), name=str(self.id)+'_bi' )
+        else:
+            self._bi_ = self._bi_init_
+            
+            
         self._Wf = initializations.get( self._init_type )( (n_in, self._n_out), name=str(self.id)+'_Wf' )
         self._Uf = initializations.get( self._init_type )( (self._n_out, self._n_out), name=str(self.id)+'_Uf' )
         self._bf = initializations.get( 'ones' )( (self._n_out), name=str(self.id)+'_bf' )
@@ -175,7 +288,7 @@ class LSTM( RnnBase ):
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
-        self.check_attributes()                             # check if all attributes are implemented
+        self._check_attributes()                             # check if all attributes are implemented
         return self
         
     # size(input): batch_size*n_times*n_in
@@ -262,7 +375,7 @@ class GRU( RnnBase ):
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
-        self.check_attributes()                             # check if all attributes are implemented
+        self._check_attributes()                             # check if all attributes are implemented
         return self
         
     # size(input): batch_size*n_times*n_in

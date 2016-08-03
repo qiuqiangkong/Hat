@@ -24,7 +24,7 @@ def placeholder( n_dim=None, name=None ):
     if n_dim==4: return T.tensor4( name=name, dtype=_FLOATX )
     
 # shared tensor from numpy array
-def sh_variable( value, name=None, dtype=_FLOATX ):
+def shared( value, name=None, dtype=_FLOATX ):
     value = np.asarray( value, dtype=dtype)
     return theano.shared( value, name )
 

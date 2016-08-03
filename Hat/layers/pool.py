@@ -38,6 +38,9 @@ class MaxPool1D( Lambda ):
         assert 'len_pool' in kwargs, "You must specifiy len_pool kwarg in MaxPool1D!"
         super( MaxPool1D, self ).__init__( _max_pool_1d, name, **kwargs )
 
+'''
+Max Pooling 2D
+'''
 # for cnn
 def _max_pool_2d( input, in_shape, **kwargs ):
     assert len(in_shape)==4, "shape.ndim should be 4, shape:(batch_size, n_infmaps, height, width), yours is " + str(in_shape)
@@ -70,7 +73,8 @@ class MaxPool2D( Lambda ):
         layer = cls( info['name'], **info['kwargs'] )
         return layer
     
-
+'''
+'''
 def _pool_2d( input, in_shape, **kwargs ):
     assert len(in_shape)==4, "shape.ndim should be 4, shape:(batch_size, n_infmaps, height, width), yours is " + str(in_shape)
     
@@ -114,6 +118,19 @@ class GlobalMeanTimePool( Lambda ):
         assert 'masking' in kwargs, "You must specifiy masking kwarg in GlobalMeanTimePool!"
         super( GlobalMeanTimePool, self ).__init__( _global_mean_time_pool, name, **kwargs )
         
+    # model's info & params
+    @property
+    def info_( self ):
+        dict = { 'id': self._id_, 
+                 'kwargs': self._kwargs_, 
+                 'name': self._name_, }
+        return dict
+        
+    # load layer from info
+    @classmethod
+    def load_from_info( cls, info ):
+        layer = cls( info['name'], **info['kwargs'] )
+        return layer
 
 '''
 max pool along axis

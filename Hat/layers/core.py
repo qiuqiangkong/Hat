@@ -3,15 +3,18 @@ SUMMARY:  basic layers for building deep neural network
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.18
 Modified: 2016.06.09 Add n_dim param to Flatten
+          2016.08.02 Add info_(), load_from_info()
 --------------------------------------
 '''
 import numpy as np
 from ..import backend as K
 from ..import initializations
 from ..import activations
+from ..import regularizations 
 from ..globals import new_id
 from ..supports import to_tuple, to_list, is_one_element
 from abc import ABCMeta, abstractmethod, abstractproperty
+
 
 '''
 Layer is the base class of all Layer Classes
@@ -26,63 +29,88 @@ class Layer( object ):
         else:
             self._name_ = name
     
+    # -------- Public attributes --------
+    
+    # layer's id
     @property
     def id_( self ):
         return self._id_
         
+    # layer's name
     @property
     def name_( self ):
         return self._name_
 
-    '''
-    Abstract properties. including _nexts, _prevs, _output, _params, _regs are . If you are implementing a new Class based on Layer, 
-    the corresponding attributes of below must be implemented. 
-    '''
+    # next layers
     @property
     def nexts_( self ):
         return self._nexts_
             
+    # prev layers
     @property
     def prevs_( self ):
         return self._prevs_
-            
+           
+    # output nodes
     @property
     def output_( self ):
         return self._output_
             
+    # output shape
     @property
     def out_shape_( self ):
         return self._out_shape_
             
+    # params (graph representation)
     @property
     def params_( self ):
         return self._params_
             
+    # regularization value (graph representation)
     @property
     def reg_value_( self ):
         return self._reg_value_
-            
+    
+    # -------- Public methods --------
+    
+    # add layer to this layer's nexts pointer
+    def add_next( self, next_layer ):
+        self._nexts_.append( next_layer )
+
+    # -------- Private methods --------
+    
     # Any class inherited this class should implement these attributes
-    def check_attributes( self ):
+    def _check_attributes( self ):
         attributes = [ '_id_', '_name_', '_prevs_', '_nexts_', '_output_', '_out_shape_', '_params_', '_reg_value_' ]
         for att in attributes:
             if hasattr( self, att ) is False:
                 raise Exception( 'attribute ' + att + ' need to be inplemented!' )
                 
-    # add layer to this layer's nexts pointer
-    def add_next( self, next_layer ):
-        self._nexts_.append( next_layer )
-        
-    '''
-    abstract methods
-    '''
-    '''
-    # serialize layer
-    @abstractmethod
-    def serialize( self ):
+    # Assign init value to weights. If init value is not given, then random is used. 
+    def _init_params( self, init_val, init_type, shape, name ):
+        if init_val is None:
+            return K.shared( initializations.get( init_type )( shape ), name )
+        else:
+            return K.shared( init_val, name )
+
+    # -------- Abstract attributes --------
+    
+    # layer's info & params (list of ndarray)
+    @abstractproperty
+    def info_( self ):
         pass
-    '''
         
+    # -------- Abstract methods --------
+    
+    # load layer from info
+    @abstractmethod
+    def load_from_info( self ):
+        pass
+
+    # ----------------------------------
+    
+    
+    
 '''
 Lambda layer is a computation layer without params. 
 You can define your own computation based on Lambda layer. 
@@ -112,26 +140,36 @@ class Lambda( Layer ):
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
-        self.check_attributes()                             # check if all attributes are implemented
+        self._check_attributes()                             # check if all attributes are implemented
         return self
         
+    # ---------- Public attributes ----------
     
-    # model's info & params
+    # layer's info & params
     @property
     def info_( self ):
-        dict = { 'id': self._id_, 
+        dict = { 'class_name': self.__class__.__name__, 
+                 'name': self._name_,
+                 'id': self._id_, 
                  'fn': self._fn, 
-                 'kwargs': self._kwargs_, 
-                 'name': self._name_, }
+                 'kwargs': self._kwargs_, }
         return dict
+        
+    # ---------- Public methods -------------
         
     # load layer from info
     @classmethod
     def load_from_info( cls, info ):
         layer = cls( info['fn'], info['name'], **info['kwargs'] )
         return layer
-    
         
+    # ---------------------------------------
+
+
+    
+'''
+Input Layer should be the first layer. 
+'''
 class InputLayer( Layer ):
     def __init__( self, in_shape, name=None ):
         super( InputLayer, self ).__init__( name )
@@ -144,36 +182,49 @@ class InputLayer( Layer ):
         self._output_ = K.placeholder( n_dim=len(out_shape), name=self._name_+'_out' )
         self._out_shape_ = out_shape
         self._params_ = []
-        self._reg_value_ = 0
+        self._reg_value_ = 0.
         
         # below are compulsory parts
-        self.check_attributes()         # check if all attributes are implemented
+        self._check_attributes()         # check if all attributes are implemented
         
-    # model's info & params
+    # ---------- Public attributes ----------
+        
+    # layer's info & params
     @property
     def info_( self ):
-        dict = { 'id': self._id_, 
+        dict = { 'class_name': self.__class__.__name__, 
+                 'id': self._id_, 
                  'name': self._name_, 
                  'in_shape': self._in_shape_, }
         return dict
+        
+    # ---------- Public methods ----------
         
     # load layer from info
     @classmethod
     def load_from_info( cls, info ):
         layer = cls( in_shape=info['in_shape'], name=info['name'] )
         return layer
+        
+    # ------------------------------------
+  
+  
+        
 '''
 Dense Layer
 '''
 class Dense( Layer ):
-    def __init__( self, n_out, act='linear', init_type='glorot_uniform', reg=None, W_init=None, b_init=None, name=None ):
+    def __init__( self, n_out, act='linear', init_type='glorot_uniform', 
+                  W_init=None, b_init=None, W_reg=None, b_reg=None, name=None ):
+                      
         super( Dense, self ).__init__( name )
         self._n_out_ = n_out
         self._init_type_ = init_type
         self._act_ = act
-        self._reg_ = reg
         self._W_init_ = W_init
         self._b_init_ = b_init
+        self._W_reg_ = W_reg
+        self._b_reg_ = b_reg
         
     def __call__( self, in_layers ):
         # merge
@@ -183,19 +234,13 @@ class Dense( Layer ):
         n_in = sum( [ layer.out_shape_[-1] for layer in in_layers ] )
         
         # init W
-        if self._W_init_ is None:
-            if self._act_=='softmax':
-                self._W_ = initializations.get( 'zeros' )( (n_in, self._n_out_), name=str(self._name_)+'_W' )
-            else:
-                self._W_ = initializations.get( self._init_type_ )( (n_in, self._n_out_), name=str(self._name_)+'_W' )
-        else: 
-            self._W_ = K.sh_variable( self._W_init_ )
-            
-        # init b
-        if self._b_init_ is None:
-            self._b_ = initializations.get( 'zeros' )( self._n_out_, name=str(self._id_)+'_b' )
+        if self._act_=='softmax':
+            self._W_ = self._init_params( self._W_init_, 'zeros', shape=(n_in, self._n_out_), name=str(self._name_)+'_W' )
         else:
-            self._b_ = K.sh_variable( self._b_init_, name=str(self._id_)+'_b' )
+            self._W_ = self._init_params( self._W_init_, self._init_type_, shape=(n_in, self._n_out_), name=str(self._name_)+'_W' )
+
+        # init b
+        self._b_ = self._init_params( self._b_init_, 'zeros', shape=(self._n_out_,), name=str(self._id_)+'_b' )
             
         # output
         lin_out = K.dot( input, self._W_ ) + self._b_
@@ -204,7 +249,6 @@ class Dense( Layer ):
         # assign attributes
         self._prevs_ = in_layers
         self._nexts_ = []
-        #self._out_shape = (None, self._n_out)
         self._out_shape_ = in_layers[0].out_shape_[0:-1] + (self._n_out_,)
         self._output_ = output
         self._params_ = [ self._W_, self._b_ ]
@@ -212,20 +256,10 @@ class Dense( Layer ):
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
-        self.check_attributes()                             # check if all attributes are implemented
+        self._check_attributes()                             # check if all attributes are implemented
         return self
         
-    # get regularization
-    def _get_reg( self ):
-        if self._reg_ is None:
-            reg_value = 0.
-        else:
-            reg_value = self._reg_value_( [ self.W ] )
-        return reg_value
-        
-    # merge outputs of many layers to one output
-    def _merge( in_layers ):
-        return K.concatenate( [ layer.output_ for layer in in_layers ] )
+    # ---------- Public attributes ----------
         
     @property
     def W_( self ):
@@ -235,26 +269,57 @@ class Dense( Layer ):
     def b_( self ):
         return K.get_value( self._b_ )
         
-    # model's info & params
+    # layer's info & params
     @property
     def info_( self ):
-        dict = { 'id': self._id_, 
+        dict = { 'class_name': self.__class__.__name__, 
+                 'id': self._id_, 
                  'name': self._name_, 
                  'n_out': self._n_out_, 
                  'act': self._act_, 
                  'init_type': self._init_type_,     # mute if W is None
-                 'reg': self._reg_, 
                  'W': self.W_, 
-                 'b': self.b_, }
+                 'b': self.b_, 
+                 'W_reg_info': regularizations.get_info( self._W_reg_ ),
+                 'b_reg_info': regularizations.get_info( self._b_reg_ ), }
         return dict
-           
+        
+    # ---------- Public methods ----------
+    
     # load layer from info
     @classmethod
     def load_from_info( cls, info ):
+        W_reg = regularizations.get_obj( info['W_reg_info'] )
+        b_reg = regularizations.get_obj( info['b_reg_info'] )
+
         layer = cls( n_out=info['n_out'], act=info['act'], init_type=info['init_type'], 
-                     reg=info['reg'], W_init=info['W'], b_init=info['b'], name=info['name'] )
+                     W_init=info['W'], b_init=info['b'], W_reg=W_reg, b_reg=b_reg, name=info['name'] )
+                     
         return layer
-           
+    
+    # ---------- Private methods ----------
+        
+    # get regularization
+    def _get_reg( self ):
+        reg_value = 0. 
+        
+        if self._W_reg_ is not None:
+            reg_value += self._W_reg_.get_reg( [self._W_] )
+            
+        if self._b_reg_ is not None:
+            reg_value += self._b_reg_.get_reg( [self._b_] )
+            
+        return reg_value
+        
+    # merge outputs of many layers to one output
+    def _merge( in_layers ):
+        return K.concatenate( [ layer.output_ for layer in in_layers ] )
+        
+    # ------------------------------------
+        
+    
+          
+# todo
 '''
 Merge Layer, can merge multi layers to one layer
 Currently only support 2 dim merge
@@ -282,7 +347,7 @@ class Merge( Layer ):
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
-        self.check_attributes()                             # check if all attributes are implemented
+        self._check_attributes()                             # check if all attributes are implemented
         return self
         
     # check if input dims are legal
@@ -350,22 +415,31 @@ class Flatten( Layer ):
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
-        self.check_attributes()                             # check if all attributes are implemented
+        self._check_attributes()                             # check if all attributes are implemented
         return self
+        
+    # ---------- Public attributes ----------
         
     # layer's info
     @property
     def info_( self ):
-        dict = { 'id': self._id_, 
-                 'ndim': self._ndim_, 
-                 'name': self._name_ }
+        dict = { 'class_name': self.__class__.__name__, 
+                 'id': self._id_, 
+                 'name': self._name_,
+                 'ndim': self._ndim_, }
         return dict
+           
+    # ---------- Public methods ----------
            
     # load layer from info
     @classmethod
     def load_from_info( cls, info ):
         layer = cls( ndim=info['ndim'], name=info['name'] )
         return layer
+
+    # ------------------------------------
+
+
 
 '''
 Dropout layer
@@ -396,9 +470,30 @@ class Dropout( Layer ):
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
-        self.check_attributes()                             # check if all attributes are implemented
+        self._check_attributes()                             # check if all attributes are implemented
         return self
         
+    # ---------- Public attributes ----------
+        
+    # layer's info
+    @property
+    def info_( self ):
+        dict = { 'class_name': self.__class__.__name__, 
+                 'id': self._id_, 
+                 'name': self._name_,
+                 'p_drop': self._p_drop_, }
+        return dict
+        
+    # ---------- Public methods ----------
+    
+    # load layer from info
+    @classmethod
+    def load_from_info( cls, info ):
+        layer = cls( p_drop=info['p_drop'], name=info['name'] )
+        return layer
+    
+    # ---------- Private methods ----------
+    
     def _tr_phase( self, input, p_drop ):
         if p_drop < 0. or p_drop >= 1:
             raise Exception('Dropout level must be in interval (0,1)')
@@ -406,20 +501,14 @@ class Dropout( Layer ):
         output = input * keep
         output /= (1.-p_drop)
         return output
+    
+    # ------------------------------------
         
-    # layer's info
-    @property
-    def info_( self ):
-        dict = { 'id': self._id_, 
-                 'p_drop': self._p_drop_, 
-                 'name': self._name_ }
-        return dict
+    
+        
+    
            
-    # load layer from info
-    @classmethod
-    def load_from_info( cls, info ):
-        layer = cls( p_drop=info['p_drop'], name=info['name'] )
-        return layer
+    
     
 
 # todo

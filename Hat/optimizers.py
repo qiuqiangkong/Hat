@@ -2,7 +2,7 @@
 SUMMARY:  optimization methods. Modified from my previous optimization.
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.20
-Modified: -
+Modified: 2016.08.02 modify name sh_variable to shared
 --------------------------------------
 '''
 import numpy as np
@@ -20,7 +20,7 @@ class SGD():
     def get_updates( self, params, gparams ):
         if len( self._vs ) == 0:
             for param in params:
-                self._vs.append( K.sh_variable( np.zeros_like( K.get_value( param ) ) ) )
+                self._vs.append( K.shared( np.zeros_like( K.get_value( param ) ) ) )
                 
         update_params = []
         update_vs = []
@@ -47,7 +47,7 @@ class Adagrad():
     def get_updates( self, params, gparams ):
         if len( self._Gs ) == 0:
             for param in params:
-                self._Gs.append( K.sh_variable( np.zeros_like( K.get_value( param ) ) ) )
+                self._Gs.append( K.shared( np.zeros_like( K.get_value( param ) ) ) )
                 
         update_params = []
         update_Gs = []
@@ -74,8 +74,8 @@ class Adadelta():
     def get_updates( self, params, gparams ):
         if not self._Egs:
             for param in params:
-                self._Egs += [ K.sh_variable( np.zeros_like(param.get_value()) ) ]
-                self._Exs += [ K.sh_variable( np.zeros_like(param.get_value()) ) ]
+                self._Egs += [ K.shared( np.zeros_like(param.get_value()) ) ]
+                self._Exs += [ K.shared( np.zeros_like(param.get_value()) ) ]
                 
         update_params = []
         update_Egs = []
@@ -106,7 +106,7 @@ class Rmsprop():
     def get_updates( self, params, gparams ):
         if len( self._Gs ) == 0:
             for param in params:
-                self._Gs.append( K.sh_variable( np.zeros_like( K.get_value( param ) ) ) )
+                self._Gs.append( K.shared( np.zeros_like( K.get_value( param ) ) ) )
                 
         update_params = []
         update_Gs = []
@@ -130,13 +130,13 @@ class Adam():
         self._eps = eps
         self._ms = []
         self._vs = []
-        self._epoch = K.sh_variable(1)
+        self._epoch = K.shared(1)
         
     def get_updates( self, params, gparams ):
         if not self._ms:
             for param in params:
-                self._ms += [ K.sh_variable( np.zeros_like( param.get_value() ) ) ]
-                self._vs += [ K.sh_variable( np.zeros_like( param.get_value() ) ) ]
+                self._ms += [ K.shared( np.zeros_like( param.get_value() ) ) ]
+                self._vs += [ K.shared( np.zeros_like( param.get_value() ) ) ]
                 
         update_params = []
         update_ms = []

@@ -202,8 +202,8 @@ class Model( Base ):
             
         if memory_mode==1:
             # store data in shared memory (GPU)
-            sh_x = [ K.sh_variable( value=e, name='tr_x' ) for e in x ]
-            sh_y = [ K.sh_variable( value=e, name='tr_y' ) for e in y ]
+            sh_x = [ K.shared( value=e, name='tr_x' ) for e in x ]
+            sh_y = [ K.shared( value=e, name='tr_y' ) for e in y ]
             
             # compile model
             input_nodes = self._in_nodes_ + self._gt_nodes_
@@ -243,10 +243,10 @@ class Model( Base ):
         
         # compile predict model
         if not hasattr( self, '_f_predict' ):
-            if len( self._out_nodes_ )==1:   # if only 1 out_node, then return it directly instead of list
-                self._f_predict = K.function_no_given( self._in_nodes_, self._tr_phase_node_, self._out_nodes_[0] )
-            else:
-                self._f_predict = K.function_no_given( self._in_nodes_, self._tr_phase_node_, self._out_nodes_ )
+            #if len( self._out_nodes_ )==1:   # if only 1 out_node, then return it directly instead of list
+                #self._f_predict = K.function_no_given( self._in_nodes_, self._tr_phase_node_, self._out_nodes_[0] )
+            #else:
+            self._f_predict = K.function_no_given( self._in_nodes_, self._tr_phase_node_, self._out_nodes_ )
         
         # do predict
         # put all data in GPU
@@ -268,7 +268,10 @@ class Model( Base ):
             # get y_out
             y_out = [ np.concatenate(e, axis=0) for e in y_out ]
         
-        return y_out
+        if len(y_out)==1:
+            return y_out[0]
+        else:
+            return y_out
         
     @property
     def info_( self ):
