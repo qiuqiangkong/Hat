@@ -121,7 +121,8 @@ class GlobalMeanTimePool( Lambda ):
     # model's info & params
     @property
     def info_( self ):
-        dict = { 'id': self._id_, 
+        dict = { 'class_name': self.__class__.__name__, 
+                 'id': self._id_, 
                  'kwargs': self._kwargs_, 
                  'name': self._name_, }
         return dict
