@@ -50,7 +50,8 @@ class Base( object ):
     
     # print progress on screen
     def _print_progress( self, epoch, batch_num, curr_batch_num ):
-        sys.stdout.write("%d-th epoch %d%%   \r" % ( epoch, float(curr_batch_num)/float(batch_num)*100 ) )
+        #sys.stdout.write("%d-th epoch %d%%   %s %f \r" % ( epoch, float(curr_batch_num)/float(batch_num)*100, 'tr_loss:', loss ) )
+        sys.stdout.write("%d-th epoch %d%% \r" % ( epoch, float(curr_batch_num)/float(batch_num)*100 ) )
         sys.stdout.flush()
         
     @property
@@ -67,8 +68,8 @@ class Base( object ):
         return self._out_nodes_
         
     @property
-    def gt_nodes_( self ):
-        return self._gt_nodes_
+    def inter_nodes( self ):
+        return self._inter_nodes_
     
     
     @property
@@ -100,8 +101,8 @@ class Base( object ):
         return n_params
         
     # check if the dim of output is correct
-    def _check_data( self, y, loss_type ):
-        if loss_type in ['categorical_crossentropy', 'binary_crossentropy', 'kl_divergence']:
+    def _check_data( self, y, loss_func ):
+        if loss_func in ['categorical_crossentropy', 'binary_crossentropy', 'kl_divergence']:
             for e in y:
                 assert e.ndim!=1, "your y.ndim is 1, try use sparse_to_categorical(y)"
         
@@ -137,26 +138,21 @@ class Base( object ):
 Supervised Model
 '''
 class Model( Base ):
-    def __init__( self, in_layers, out_layers, obj_weights=None ):
+    def __init__( self, in_layers, out_layers, inter_layers=[] ):
         super( Model, self ).__init__( in_layers )
 
-        # default obj_weights
-        if obj_weights is None: obj_weights = [1. / len(out_layers)] * len(out_layers)
-        assert len(out_layers)==len(obj_weights), "num of out_layers must equal num of obj_weights!"
-        
         # out layers
         out_layers = to_list( out_layers )
         self._out_layers_ = out_layers
-        self._obj_weights_ = obj_weights
-        
-        # out_nodes & create gt_nodes
         self._out_nodes_ = [ layer.output_ for layer in self._out_layers_ ]
-        self._gt_nodes_ = [ K.placeholder( len(layer.out_shape_) ) for layer in self._out_layers_ ]
+        
+        # inter layers
+        inter_layers = to_list( inter_layers )
+        self._inter_layers_ = inter_layers
+        self._inter_nodes_ = [ layer.output_ for layer in self._inter_layers_ ]
 
-    '''
-    memory mode 0 (default): transfer from cpu to gpu every time, 1: store all data in gpu
-    '''
-    def fit( self, x, y, batch_size=100, n_epoch=10, loss_type='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], memory_mode=0, verbose=1 ):
+
+    def fit( self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], memory_mode=0, verbose=1 ):
         x = to_list( x )
         y = to_list( y )
         
@@ -168,16 +164,25 @@ class Model( Base ):
         x, y = shuffle( x, y )
         
         # check data
-        self._check_data( y, loss_type )
+        self._check_data( y, loss_func )
+        
+        # init gt_nodes
+        gt_nodes = [ K.placeholder( e.ndim ) for e in y ]
         
         # memory usage
         #mem_usage = memory_usage( x, y )
         #print 'memory usage:', mem_usage / 8e6, 'Mb'
         
-        # loss
-        loss_node = sum( [ obj.get( loss_type )( pred_node, gt_node ) * w 
-                        for pred_node, gt_node, w in zip( self._out_nodes_, self._gt_nodes_, self._obj_weights_ ) ] )
-        
+        # default objective
+        if type(loss_func) is str:
+            assert len(self._out_nodes_)==len(gt_nodes), "If you are using default objectives, " \
+                                            + "out_node of out_layers must match ground truth!"
+            loss_node = sum( [ obj.get( loss_func )( pred_node, gt_node ) 
+                            for pred_node, gt_node in zip( self._out_nodes_, gt_nodes ) ] )
+        # user defined objective
+        else:
+            loss_node = loss_func( self._out_nodes_, self._inter_nodes_, gt_nodes )
+         
         # gradient
         gparams = K.grad( loss_node + self._reg_value_, self._params_ )
         
@@ -193,28 +198,17 @@ class Model( Base ):
             callbacks = to_list( callbacks )
             for callback in callbacks:
                 callback.compile( self ) 
-        
-        if memory_mode==0:
-            # compile model
-            input_nodes = self._in_nodes_ + self._gt_nodes_
-            output_nodes = [ loss_node ]
-            f = K.function_no_given( input_nodes, self._tr_phase_node_, output_nodes, updates )
-            
-        if memory_mode==1:
-            # store data in shared memory (GPU)
-            sh_x = [ K.shared( value=e, name='tr_x' ) for e in x ]
-            sh_y = [ K.shared( value=e, name='tr_y' ) for e in y ]
-            
-            # compile model
-            input_nodes = self._in_nodes_ + self._gt_nodes_
-            output_nodes = [ loss_node ]
-            given_nodes = sh_x + sh_y
-            f = K.function_given( batch_size, input_nodes, self._tr_phase_node_, output_nodes, given_nodes, updates )
+
+        # compile model
+        input_nodes = self._in_nodes_ + gt_nodes
+        output_nodes = [ loss_node ]
+        f = K.function_no_given( input_nodes, self._tr_phase_node_, output_nodes, updates )
 
         # train
         N = len( x[0] )
         batch_num = int( np.ceil( float(N) / batch_size ) )
-        while self._epoch_ < n_epoch:
+        n_abs_epoch = n_epochs + self._epoch_
+        while self._epoch_ < n_abs_epoch:
             # callback
             for callback in callbacks:
                 if ( self._epoch_ % callback.call_freq == 0 ):
@@ -222,19 +216,20 @@ class Model( Base ):
                     
             # train
             t1 = time.time()
+            loss_list = []
             for i2 in xrange(batch_num):
-                if memory_mode==0:
-                    batch_x = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in x ]
-                    batch_y = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in y ]
-                    in_list = batch_x + batch_y + [1.]
-                    loss = f( *in_list )[0]                     # training phase          
-                if memory_mode==1:
-                    loss = f(i2, 1.)[0]                     # training phase          
+                batch_x = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in x ]
+                batch_y = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in y ]
+                in_list = batch_x + batch_y + [1.]
+                loss = f( *in_list )[0]                     # training phase 
+                loss_list.append( loss )
                 if verbose: self._print_progress( self._epoch_, batch_num, i2 )
+            #if verbose: self._print_progress( self._epoch_, batch_num, i2, np.mean(loss_list) )
+                
             t2 = time.time()
             self._tr_time_ += (t2 - t1)
             self._epoch_ += 1
-            print '\n', 'train time: ', "%.2f " % (t2-t1), 's'          # print an empty line
+            print '\n', '    tr_time: ', "%.2f" % (t2-t1), 's'          # print an empty line
 
     def predict( self, x, batch_size=100 ):
         # format data
@@ -243,9 +238,6 @@ class Model( Base ):
         
         # compile predict model
         if not hasattr( self, '_f_predict' ):
-            #if len( self._out_nodes_ )==1:   # if only 1 out_node, then return it directly instead of list
-                #self._f_predict = K.function_no_given( self._in_nodes_, self._tr_phase_node_, self._out_nodes_[0] )
-            #else:
             self._f_predict = K.function_no_given( self._in_nodes_, self._tr_phase_node_, self._out_nodes_ )
         
         # do predict
@@ -273,16 +265,21 @@ class Model( Base ):
         else:
             return y_out
         
+    
     @property
     def info_( self ):
-        dict = { 'obj_weights': self._obj_weights_ }
+        dict = { 'epoch': self.epoch_, 
+                 'in_ids': [ layer.id_ for layer in self._in_layers_ ], 
+                 'out_ids': [ layer.id_ for layer in self._out_layers_ ], 
+                 'inter_ids': [layer.id_ for layer in self._inter_layers_] }
         return dict
-        
+    
     @classmethod
-    def load_from_info( cls, in_layers, out_layers, info ):
-        md = cls( in_layers, out_layers, info['obj_weights'] )
+    def load_from_info( cls, in_layers, out_layers, inter_layers, info ):
+        md = cls( in_layers, out_layers, inter_layers )
+        md._epoch_ = info['epoch']
         return md
-        
+    
         
 class Sequential( Model ):
     def __init__( self ):

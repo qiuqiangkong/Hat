@@ -19,6 +19,7 @@ def sigmoid( x ):
 
 # x can be tensor
 def softmax( x ):
+    assert x.ndim==2    # todo
     if x.ndim==2:
         return K.softmax( x )
     if x.ndim>2:

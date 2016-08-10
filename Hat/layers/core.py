@@ -7,12 +7,13 @@ Modified: 2016.06.09 Add n_dim param to Flatten
 --------------------------------------
 '''
 import numpy as np
+import inspect
 from ..import backend as K
 from ..import initializations
 from ..import activations
 from ..import regularizations 
 from ..globals import new_id
-from ..supports import to_tuple, to_list, is_one_element
+from ..supports import to_tuple, to_list, is_one_element, is_elem_equal
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 
@@ -124,11 +125,33 @@ class Lambda( Layer ):
     def __call__( self, in_layers ):
         in_layers = to_list( in_layers )
         
-        # do lamda function
         inputs = [ in_layer.output_ for in_layer in in_layers ]
         in_shapes = [ in_layer.out_shape_ for in_layer in in_layers ]
-        in_list = inputs + in_shapes
-        output, out_shape = self._fn( *in_list, **self._kwargs_ )
+        
+        # non_var_args will choose which _fn to use
+        non_var_args = inspect.getargspec( self._fn )[0]       # num of arguments, not include **kwargs
+    
+        # overload 1, with in_shape argument
+        if 'in_shapes' in non_var_args:
+            return_tuple = self._fn( *inputs, in_shapes=in_shapes, **self._kwargs_ )
+            assert len(to_tuple(return_tuple))==2, "Your must return output, out_shape in your Lambda function!"
+            (output, out_shape) = return_tuple
+            assert type(out_shape) is tuple, "Check your out_shape in your Lambda function!"
+        # overload 2, w/o in_shape argument
+        else:
+            output = self._fn( *inputs, **self._kwargs_ )
+            assert is_elem_equal( in_shapes ), "Your Input Layers' shapes are not same. " \
+                    + "Try add 'in_shapes' arguments and 'out_shape' to your Lambda function!"
+            out_shape = in_shapes[0]
+            print out_shape
+        
+        '''
+        else:
+            raise Exception( "The Lambda function you defined should be func( node1, node2, ..., [in_shapes], **kwargs )" )
+        '''
+        # do lamda function
+        
+        
         
         # assign attributes
         self._prevs_ = in_layers

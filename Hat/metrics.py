@@ -43,6 +43,12 @@ def binary_crossentropy( p_y_pred, y_gt ):
 def mse( y_pred, y_gt ):
     assert len(y_pred)==len(y_gt), "Length of y_out and y_gt (ground true) is not equal!"
     return np.mean( np.sum( np.square( y_pred - y_gt ), axis=1 ) )
+    
+def norm_lp( y_pred, y_gt, norm ):
+    return np.mean( np.sum( np.power( np.abs(y_pred - y_gt), norm ), axis=-1 ) )
+    
+def norm_l1( y_pred, y_gt ):
+    return norm_lp( y_pred, y_gt, 1. )
 
 def kl_divergence( y_pred, y_gt ):
     y_pred = np.clip( y_pred, _EPSILON, 1. - _EPSILON )

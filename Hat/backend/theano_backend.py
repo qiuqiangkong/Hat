@@ -148,9 +148,6 @@ def relu( x, alpha, max_value ):
 # cross entropy loss. y_pred, y_gt should be 2D, DO NOT USE tensor.nnet.categorical_crossentropy
 def categorical_crossentropy( p_y_pred, y_gt ):
     return T.mean( T.nnet.categorical_crossentropy( p_y_pred, y_gt ) )
-    # DO NOT DELETE! This is manually written cross entropy. Some times no bug than T.nnet.categorical_crossentropy
-    #z = T.argmax(y_gt, axis=-1)
-    #return -T.mean( T.log(p_y_pred)[T.arange(z.shape[0]), z] )
     
 def binary_crossentropy( p_y_pred, y_gt ):
     return T.mean( T.nnet.binary_crossentropy( p_y_pred, y_gt ) )

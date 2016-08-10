@@ -104,12 +104,14 @@ def load( path ):
 
         layer_list.append( layer )
         
+        
     # find in_layers & out_layers
-    in_layers = _find_in_layers( layer_list )
-    out_layers = _find_out_layers( layer_list )
+    in_layers = [ _find_layer( layer_list, id ) for id in md_info['in_ids'] ]
+    out_layers = [ _find_layer( layer_list, id ) for id in md_info['out_ids'] ]
+    inter_layers = [ _find_layer( layer_list, id ) for id in md_info['inter_ids'] ]
     
     # construct model
-    md = md_func.load_from_info( in_layers, out_layers, md_info )
+    md = md_func.load_from_info( in_layers, out_layers, inter_layers, md_info )
     
     return md
         

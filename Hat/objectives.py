@@ -1,6 +1,9 @@
 import backend as K
 import numpy as np
 
+
+
+### all return are graphic representation
 _EPSILON = 1e-6     # when set to 1e-8, binary_crossentropy underflow
 
 # categorical crossentropy
@@ -14,8 +17,15 @@ def binary_crossentropy( p_y_pred, y_gt ):
     return K.binary_crossentropy( p_y_pred, y_gt )
     
 # mean square error
-def mse( p_y_pred, y_gt ):
-    return K.mean( K.sum( K.sqr( p_y_pred - y_gt ), axis=-1 ) )
+def mse( y_pred, y_gt ):
+    return K.mean( K.sum( K.sqr( y_pred - y_gt ), axis=-1 ) )
+
+# mean lp norm. mean( ||y-o||_{p}^{p} )
+def norm_lp( y_pred, y_gt, norm ):
+    return K.mean( K.sum( K.power( K.abs(y_pred - y_gt), norm ), axis=-1 ) )
+    
+def norm_l1( y_pred, y_gt ):
+    return norm_lp( y_pred, y_gt, 1. )
     
 #todo not well tested
 def kl_divergence( y_pred, y_gt ):

@@ -26,6 +26,9 @@ def is_one_element( x ):
     if len(x)==1: return True
     else: return False
     
+def is_elem_equal( x ):
+    return len( set( x ) ) <= 1
+    
 # Get mask from data (for RNN). size(mask): batch_num*n_time
 def get_mask( input ):
     return K.neq( K.sum( K.abs( input ), axis=-1 ), 0. )
