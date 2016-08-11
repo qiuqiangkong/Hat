@@ -5,14 +5,14 @@ Characters:
 1. including DNN, CNN, RNN (LSTM, GRU), Dropout. 
 2. Build any structure as you like! 
 
-Installation:
+Prerequisite:
 1. python version: 2.7+
 2. theano
 3. networkx (optional. for ploting graph)
 
-Usage:
-import sys
-sys.path.append('your_download_folder/Hat')
+Installation:
+$ pip install Hat
+(or you can install from source code)
 
 Examples:
 https://github.com/qiuqiangkong/Hat/tree/master/examples
