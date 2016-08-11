@@ -1,3 +1,1 @@
-import sys
-sys.path.append(".")
-from backend import *
+from . import backend

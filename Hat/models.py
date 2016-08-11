@@ -68,7 +68,7 @@ class Base( object ):
         return self._out_nodes_
         
     @property
-    def inter_nodes( self ):
+    def inter_nodes_( self ):
         return self._inter_nodes_
     
     
@@ -132,7 +132,10 @@ class Base( object ):
         nx.draw_networkx_nodes( G , pos, node_size=800, node_color='r', node_shape='o' )
         nx.draw_networkx_labels( G, pos, labels=labels )
         nx.draw_networkx_edges( G, pos )
-        plt.show()
+        try:
+            plt.show()
+        except:
+            print "Warning! You do not have graphic interface to plot connection! "
 
 '''
 Supervised Model

@@ -140,8 +140,8 @@ class Lambda( Layer ):
         # overload 2, w/o in_shape argument
         else:
             output = self._fn( *inputs, **self._kwargs_ )
-            assert is_elem_equal( in_shapes ), "Your Input Layers' shapes are not same. " \
-                    + "Try add 'in_shapes' arguments and 'out_shape' to your Lambda function!"
+            assert is_elem_equal( in_shapes ), "Your Input Layers' shapes are not same. Check your model! " \
+                    + "Or try add 'in_shapes' arguments and 'out_shape' to your Lambda function!"
             out_shape = in_shapes[0]
             print out_shape
         
@@ -481,7 +481,7 @@ class Dropout( Layer ):
         
         # dropout
         input = in_layer.output_
-        output = K.ifelse( K.eq( self._tr_phase_node_, 1. ), self._tr_phase( input, self._p_drop_ ), input )
+        output = K.ifelse( K.eq( self._tr_phase_node_, 1. ), self._drop_out( input, self._p_drop_ ), input )
         
         # assign attributes
         self._prevs_ = in_layers
@@ -517,7 +517,7 @@ class Dropout( Layer ):
     
     # ---------- Private methods ----------
     
-    def _tr_phase( self, input, p_drop ):
+    def _drop_out( self, input, p_drop ):
         if p_drop < 0. or p_drop >= 1:
             raise Exception('Dropout level must be in interval (0,1)')
         keep = K.rng_binomial( input.shape, 1.-p_drop )

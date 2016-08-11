@@ -93,9 +93,10 @@ class Validation( Callback ):
               'call_freq': self._call_freq_, 
               }
         for metric in self._metrics_:
-            r[ 'tr_'+metric ] = []
-            r[ 'va_'+metric ] = []
-            r[ 'te_'+metric ] = []
+            metric_name = self._to_str( metric )
+            r[ 'tr_'+metric_name ] = []
+            r[ 'va_'+metric_name ] = []
+            r[ 'te_'+metric_name ] = []
         return r
     
     def _is_data( self, x, y ):
@@ -128,8 +129,7 @@ class Validation( Callback ):
         # init gt_nodes
         gt_nodes = [ K.placeholder( e.ndim ) for e in y ]
         
-        # for each metric
-        t1 = time.time()
+        # get metric losses node
         loss_nodes = []
         for metric in self._metrics_:
             # if use default objective
@@ -153,6 +153,7 @@ class Validation( Callback ):
             print 'compile finished. '
         
         # calculate metric values
+        t1 = time.time()
         if self._batch_size_ is None:
             in_list = x + y + [0.]
             metric_vals = np.array( self._f_evaluate( *in_list ) )
@@ -188,11 +189,16 @@ class Validation( Callback ):
     def _print_time_results( self, eval_type, metrics, metric_vals, time ):
         chs = "    "
         for i1 in xrange( len(metrics) ):
-            if type( metrics[i1] ) is str: metric_name = metrics[i1]
-            else: metric_name = metrics[i1].__name__
+            metric_name = self._to_str( metrics[i1] )
             chs += eval_type + "_" + metric_name + ": %.5f" % metric_vals[i1] + "    | "
         chs += "time: %.2f" % time
         print chs
+        
+    def _to_str( self, a ):
+        if type(a) is str:
+            return a
+        else:
+            return a.__name__
         
 '''
 Save Model every n-epoches

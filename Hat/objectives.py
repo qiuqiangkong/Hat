@@ -41,3 +41,9 @@ def get( loss ):
         raise Exception( 'No ' + loss + ' loss!' )
     else:
         return f
+        
+        
+        
+### user can define their own objective function
+def loss_func( out_nodes, inter_nodes, gt_nodes ):
+    pass
