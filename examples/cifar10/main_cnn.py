@@ -7,8 +7,6 @@ Created:  2016.07.25
 Modified: 2016.08.16 Update
 --------------------------------------
 '''
-import sys
-sys.path.append('/user/HS229/qk00006/my_code2015.5-/python/Hat')
 import numpy as np
 import os
 import pickle
