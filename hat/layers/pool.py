@@ -14,6 +14,8 @@ from ..supports import to_list, to_tuple, get_mask
 import numpy as np
 # from theano.tensor.signal.downsample import max_pool_2d
 
+
+# todo
 def _max_pool_1d( input, in_shape, **kwargs ):
     assert len(in_shape)==3, "shape.ndim should be 3, shape:(batch_size, n_time, n_in), yours is " + str(in_shape)
     
@@ -37,6 +39,8 @@ class MaxPool1D( Lambda ):
     def __init__( self, name=None, **kwargs ):
         assert 'len_pool' in kwargs, "You must specifiy len_pool kwarg in MaxPool1D!"
         super( MaxPool1D, self ).__init__( _max_pool_1d, name, **kwargs )
+
+
 
 '''
 Max Pooling 2D
@@ -74,6 +78,8 @@ class MaxPool2D( Lambda ):
         layer = cls( info['name'], **info['kwargs'] )
         return layer
     
+    
+# todo
 '''
 '''
 def _pool_2d( input, in_shape, **kwargs ):
@@ -96,6 +102,8 @@ class Pool2D( Lambda ):
         assert 'pool_mode' in kwargs, "You must specifiy pool_mode kwarg! eg. 'max', 'avg'"
         super( Pool2D, self ).__init__( _pool_2d, name, **kwargs )
 
+
+# todo
 '''
 Mean along time axis in RNN. 
 '''
@@ -114,6 +122,8 @@ def _global_mean_time_pool( input, in_shape, **kwargs ):
     out_shape = ( in_shape[0], in_shape[2] )
     return output, out_shape
     
+    
+# todo
 class GlobalMeanTimePool( Lambda ):
     def __init__( self, name=None, **kwargs ):
         assert 'masking' in kwargs, "You must specifiy masking kwarg in GlobalMeanTimePool!"
@@ -134,6 +144,8 @@ class GlobalMeanTimePool( Lambda ):
         layer = cls( info['name'], **info['kwargs'] )
         return layer
 
+
+# todo
 '''
 max pool along axis
 '''

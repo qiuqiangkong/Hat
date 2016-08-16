@@ -1,77 +1,107 @@
 '''
-SUMMARY:  Example for imdb classification, using LSTM
-          Training time: 25 s/epoch. (Tesla M2090)
-          Test error: 19% after 30 epoches. (Better results can be got by tuning hyper-params)
+SUMMARY:  Using deep stacked Rnn, Lstm, GRU do char prediction & generation
+          Actully this dataset is too small to use long seqs. Hense the advantage of LSTM, GRU is not obvious. 
+          Training time: 2 s/epoch. (Tesla M2090)
+          test crossentropy: 2.5 after 5 epoches (You can easily beat this by tuning hyper-params and structure)
+          Ref: https://gist.github.com/karpathy/d4dee566867f8291f086
 AUTHOR:   Qiuqiang Kong
-Created:  2016.05.30
-Modified: 2016.07.26 Make code clearer
+Created:  2016.05.18
+Modified: 2016.05.25 Modified
+          2016.08.16 Update
 --------------------------------------
 '''
 import numpy as np
-np.random.seed(1337)
-import os
-from Hat.models import Sequential
-from Hat.layers.core import InputLayer, Dense, Flatten
-from Hat.layers.embeddings import Embedding
-from Hat.layers.rnn import SimpleRnn, LSTM, GRU
-from Hat.layers.pool import GlobalMeanTimePool
-from Hat.callbacks import SaveModel, Validation
-from Hat.preprocessing import sparse_to_categorical, pad_trunc_seqs
-from Hat.optimizers import Rmsprop
-import Hat.backend as K
-from prepare_data import load_data
+np.random.seed(1515)
+from hat.models import Sequential
+from hat.layers.core import InputLayer, Dense, Flatten
+from hat.layers.rnn import SimpleRnn, LSTM, GRU
+from hat.callbacks import Callback, Validation
+from hat.preprocessing import sparse_to_categorical
+from hat.optimizers import Rmsprop, Adam
+import hat.backend as K
 import pickle
 
+# prepare data
+def GetXy( data, agg_num ):
+    X, y = [], []
+    for i1 in xrange( agg_num, len(data) ):
+        ids = np.array( [ char_to_ix[ch] for ch in data[i1-agg_num:i1] ] )
+        x = sparse_to_categorical( ids, vocab_size )
+        X.append(x)
+        y.append( sparse_to_categorical( np.array( [ char_to_ix[ data[i1] ] ] ), vocab_size ) )        
+    X = np.array( X )
+    y = np.array( y )
+    y = y.reshape((y.shape[0],y.shape[2]))
+    return X, y
 
-# hyper-params
-n_words=20000       # regard vocabulary larger than this as unknown
-n_proj = 128        # embedding dim
-n_hid = 128         # LSTM hid units
-max_len = 80        # truncate or pad sentence to this length
-n_out = 2
+# this is an example of building your own callback function 
+# This function will be called every n-epoch training finished. 
+class GenerateChar( Callback ):
+    def __init__( self, vocab_size, ix_to_char, call_freq ):
+        self._vocab_size_ = vocab_size
+        self._call_freq_ = call_freq
+        self._ix_to_char_ = ix_to_char
+        
+    def compile( self, md ):
+        self._md_ = md
+        
+    def call( self ):
+        x = None
+        chs = ''
+        N = 200     # num of chars to be generated
+        for i1 in xrange( N ):
+            ix, x = self._generate(x)
+            chs += self._ix_to_char_[ix]
+        print '\n--------------\n', chs, '\n--------------'
+        
+    def _generate( self, x ):
+        if x is None:
+            x = np.zeros( ( agg_num, self._vocab_size_ ) )
+        input = x.reshape( (1,)+x.shape )   # input dim must be 3d, (batch_num=1, n_time, vocab_size)
+        p_y_pred = md.predict( input )[0].flatten()
+        ix = np.random.choice( self._vocab_size_, p=p_y_pred)
+        tmp = np.zeros( self._vocab_size_ )
+        tmp[ix] = 1
+        x = np.vstack( ( x[1:], tmp ) )
+        return ix, x
 
-### prepare data
-# load data (20000 for training, 5000 for testing)
-tr_X, tr_y, te_X, te_y = load_data( nb_words=n_words )
+### hyperparameters
+n_hid = 50      # size of hidden layer of neurons
+agg_num = 20     # concatenate frames
 
-# pad & truncate sequences
-tr_X = pad_trunc_seqs( tr_X, max_len, pad_type='pre' )
-te_X = pad_trunc_seqs( te_X, max_len, pad_type='pre' )
+### load data & preparation
+data = open('input.txt', 'r').read() # should be simple plain text file
+chars = list(set(data))
+data_size, vocab_size = len(data), len(chars)
+print 'data has %d characters, %d unique.' % (data_size, vocab_size)
+char_to_ix = { ch:i for i,ch in enumerate(chars) }
+ix_to_char = { i:ch for i,ch in enumerate(chars) }
 
-# sparse target to categorical target
-tr_y = sparse_to_categorical( tr_y, n_out )
-te_y = sparse_to_categorical( te_y, n_out )
+tr_data = data[0:-1000]
+te_data = data[-1000:]
+tr_X, tr_y = GetXy( tr_data, agg_num )
+te_X, te_y = GetXy( te_data, agg_num )
+print 'shape tr_X:', tr_X.shape, 'shape tr_y:', tr_y.shape
 
 ### build model
-md = Sequential()
-md.add( InputLayer( max_len ) )
-md.add( Embedding( n_words, n_proj ) )
-md.add( LSTM( n_hid, 'tanh', return_sequence=False ) )
-md.add( Dense( n_out, 'softmax' ) )
+seq = Sequential()
+seq.add( InputLayer( (agg_num,vocab_size) ) )
+seq.add( LSTM( n_hid, act='tanh', return_sequence=True ) )      # Try SimpleRnn, LSTM, GRU instead
+seq.add( LSTM( n_hid, act='tanh', return_sequence=True ) )
+seq.add( Flatten() )
+seq.add( Dense( n_out=vocab_size, act='softmax' ) )
+md = seq.combine()
 
-# print summary info of model
 md.summary()
 
-### optimization method
-#optimizer = SGD( lr=0.01, rho=0.9 )
-optimizer = Rmsprop(0.001)
+# optimizer
+optimizer = Adam(0.01)
 
-### callbacks (optional)
-# save model every n epoch (optional)
-if not os.path.exists('Md'): os.makedirs('Md')
-save_model = SaveModel( dump_fd='Md', call_freq=2 )
+### validation
+validation = Validation( tr_x=tr_X, tr_y=tr_y, va_x=None, va_y=None, te_x=te_X, te_y=te_y, call_freq=1, 
+                        metrics=['categorical_error', 'categorical_crossentropy'], dump_path='validation.p' )
+generate_char = GenerateChar( vocab_size, ix_to_char, call_freq=1 )
+callbacks = [ validation, generate_char ]
 
-# validate model every n epoch (optional)
-validation = Validation( tr_x=tr_X, tr_y=tr_y, va_x=None, va_y=None, te_x=te_X, te_y=te_y, metric_types=['categorical_error', 'categorical_crossentropy'], call_freq=1, dump_path='validation.p' )
-
-# callbacks function
-callbacks = [validation, save_model]
-
-### train model
-md.fit( x=tr_X, y=tr_y, batch_size=32, n_epoch=20, loss_type='categorical_crossentropy', optimizer=optimizer, callbacks=callbacks )
-
-### predict using model
-pred_y = md.predict( te_X )
-
-### save model
-md.dump( 'mnist_mlp_md.p' )
+### train & validate
+md.fit( x=tr_X, y=tr_y, batch_size=100, n_epochs=2000, loss_func='categorical_crossentropy', optimizer=optimizer, callbacks=callbacks )

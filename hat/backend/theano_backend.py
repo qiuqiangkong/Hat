@@ -97,6 +97,9 @@ def ndim( x ):
 def max( x, axis=None ):
     return T.max( x, axis )
     
+def argmax( x, axis=None ):
+    return T.argmax( x, axis )
+    
 def clip( x, min_, max_ ):
     return T.clip( x, min_, max_ )
     

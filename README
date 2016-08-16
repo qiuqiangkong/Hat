@@ -7,8 +7,10 @@ Characters:
 
 Prerequisite:
 1. python version: 2.7+
+   numpy
 2. theano
 3. networkx (optional. for ploting graph)
+   matplotlib
 
 Installation:
 $ pip install Hat

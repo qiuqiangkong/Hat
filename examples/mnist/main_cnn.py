@@ -1,27 +1,26 @@
 '''
 SUMMARY:  Example for mnist classification, using Lenet-CNN
-          Training time: 25 s/epoch. (Tesla M2090)
-          Test error: 0.74% after 30 epoches. (Better results can be got by tuning hyper-params)
+          Training time: 18 s/epoch. (Tesla M2090)
+          Test error: 1.15% after 10 epoches. (Still underfitting. Better results can be obtained by tuning hyper-params)
 Ref:      https://github.com/fchollet/keras/blob/master/examples/mnist_cnn.py
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.18
 Modified: 2016.07.26 Make code clearer
+          2016.08.16 Update
 --------------------------------------
 '''
-import sys
-sys.path.append('/user/HS229/qk00006/my_code2015.5-/python/Hat')
 import pickle
 import numpy as np
 np.random.seed(1515)
 import os
-from Hat.models import Sequential
-from Hat.layers.core import InputLayer, Flatten, Dense, Dropout
-from Hat.layers.cnn import Convolution2D
-from Hat.layers.pool import MaxPool2D
-from Hat.callbacks import SaveModel, Validation
-from Hat.preprocessing import sparse_to_categorical
-from Hat.optimizers import Adam
-import Hat.backend as K
+from hat.models import Sequential
+from hat.layers.core import InputLayer, Flatten, Dense, Dropout
+from hat.layers.cnn import Convolution2D
+from hat.layers.pool import MaxPool2D
+from hat.callbacks import SaveModel, Validation
+from hat.preprocessing import sparse_to_categorical
+from hat.optimizers import Adam
+import hat.backend as K
 from prepare_data import load_data
 
 # resize data for fit into CNN. size: (batch_num*color_maps*height*weight)
@@ -57,7 +56,6 @@ seq.add( Dense( n_hid, act = 'relu' ) )
 seq.add( Dropout( 0.5 ) )
 seq.add( Dense( n_hid, act = 'relu' ) )
 seq.add( Dense( n_out, act='softmax' ) )
-
 md = seq.combine()
 
 # print summary info of model
@@ -72,25 +70,13 @@ if not os.path.exists('Md'): os.makedirs('Md')
 save_model = SaveModel( dump_fd='Md', call_freq=2 )
 
 # validate model every n epoch (optional)
-validation = Validation( tr_x=None, tr_y=None, va_x=va_X, va_y=va_y, te_x=te_X, te_y=te_y, batch_size=500, metric_types=['categorical_error'], call_freq=1, dump_path='validation.p' )
+validation = Validation( tr_x=None, tr_y=None, va_x=va_X, va_y=va_y, te_x=te_X, te_y=te_y, batch_size=500, metrics=['categorical_error'], call_freq=1, dump_path='validation.p' )
 
 # callbacks function
 callbacks = [validation, save_model]
 
 ### train model
-md.fit( x=tr_X, y=tr_y, batch_size=500, n_epoch=50, loss_type='categorical_crossentropy', optimizer=optimizer, callbacks=callbacks )
+md.fit( x=tr_X, y=tr_y, batch_size=500, n_epochs=50, loss_func='categorical_crossentropy', optimizer=optimizer, callbacks=callbacks )
 
 ### predict using model
 pred_y = md.predict( te_X, batch_size=500 )
-
-### save model
-md.dump( 'mnist_mlp_md.p' )
-
-
-'''
-# Load model
-# Later you can use
-md = pickle.load( open( 'Md/md2.p', 'rb' ) )
-md.fit(...)     # continue training
-md.predict(...) # testing
-'''

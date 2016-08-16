@@ -1,10 +1,13 @@
 import backend as K
 import numpy as np
 
+### user can define their own objective function
+def loss_func( out_nodes, inter_nodes, gt_nodes ):
+    # return loss_node
+    pass
 
-
-### all return are graphic representation
-_EPSILON = 1e-6     # when set to 1e-8, binary_crossentropy underflow
+### objectives, all return are graphic representation
+_EPSILON = 1e-6     # when set to 1e-6, binary_crossentropy underflow
 
 # categorical crossentropy
 def categorical_crossentropy( p_y_pred, y_gt ):
@@ -34,6 +37,13 @@ def kl_divergence( y_pred, y_gt ):
     return K.mean( K.sum( y_gt * K.log( y_gt / y_pred ) - y_gt + y_pred, axis=-1 ) )
     
     
+    
+### 
+def categorical_error( p_y_pred, y_gt ):
+    y_pred_sparse = K.argmax( p_y_pred, axis=-1 )
+    y_gt_sparse = K.argmax( y_gt, axis=-1 )
+    return K.mean( K.neq( y_pred_sparse, y_gt_sparse ) )
+    
 def get( loss ):
     f = globals().get( loss )
     if f is None:
@@ -44,6 +54,3 @@ def get( loss ):
         
         
         
-### user can define their own objective function
-def loss_func( out_nodes, inter_nodes, gt_nodes ):
-    pass

@@ -124,34 +124,41 @@ class Lambda( Layer ):
         
     def __call__( self, in_layers ):
         in_layers = to_list( in_layers )
-        
         inputs = [ in_layer.output_ for in_layer in in_layers ]
         in_shapes = [ in_layer.out_shape_ for in_layer in in_layers ]
         
         # non_var_args will choose which _fn to use
         non_var_args = inspect.getargspec( self._fn )[0]       # num of arguments, not include **kwargs
-    
-        # overload 1, with in_shape argument
-        if 'in_shapes' in non_var_args:
-            return_tuple = self._fn( *inputs, in_shapes=in_shapes, **self._kwargs_ )
-            assert len(to_tuple(return_tuple))==2, "Your must return output, out_shape in your Lambda function!"
-            (output, out_shape) = return_tuple
-            assert type(out_shape) is tuple, "Check your out_shape in your Lambda function!"
-        # overload 2, w/o in_shape argument
-        else:
-            output = self._fn( *inputs, **self._kwargs_ )
-            assert is_elem_equal( in_shapes ), "Your Input Layers' shapes are not same. Check your model! " \
-                    + "Or try add 'in_shapes' arguments and 'out_shape' to your Lambda function!"
-            out_shape = in_shapes[0]
-            print out_shape
-        
-        '''
-        else:
-            raise Exception( "The Lambda function you defined should be func( node1, node2, ..., [in_shapes], **kwargs )" )
-        '''
-        # do lamda function
-        
-        
+
+        # case 1: num_input_layer=1
+        if len( in_layers ) == 1:
+            assert 'input' in non_var_args, "Your Lamda function do not have 'input' argument! "
+            # overload 1, with in_shape argument
+            if 'in_shape' in non_var_args:
+                return_tuple = self._fn( inputs[0], in_shape=in_shapes[0], **self._kwargs_ )
+                assert len(to_tuple(return_tuple))==2, "Your must return output, out_shape in your Lambda function!"
+                (output, out_shape) = return_tuple
+                assert type(out_shape) is tuple, "Check your out_shape in your Lambda function!"
+            # overload 2, w/o in_shape argument
+            else:
+                 output = self._fn( inputs[0], **self._kwargs_ )
+                 out_shape = in_shapes[0]
+                 
+        # case 2: num_input_layer>1
+        elif len( in_layers ) > 1:
+            assert 'inputs' in non_var_args, "Your Lamda function do not have 'inputs' argument! "
+            # overload 1, with in_shape argument
+            if 'in_shapes' in non_var_args:
+                return_tuple = self._fn( inputs, in_shapes=in_shapes, **self._kwargs_ )
+                assert len(to_tuple(return_tuple))==2, "Your must return output, out_shape in your Lambda function!"
+                (output, out_shape) = return_tuple
+                assert type(out_shape) is tuple, "Check your out_shape in your Lambda function!"
+            # overload 2, w/o in_shape argument
+            else:
+                output = self._fn( inputs, **self._kwargs_ )
+                assert is_elem_equal( in_shapes ), "Your Input Layers' shapes are not same. Check your model! " \
+                        + "Or try add 'in_shapes' arguments and 'out_shape' to your Lambda function!"
+                out_shape = in_shapes[0]
         
         # assign attributes
         self._prevs_ = in_layers
