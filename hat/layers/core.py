@@ -245,7 +245,7 @@ Dense Layer
 '''
 class Dense( Layer ):
     def __init__( self, n_out, act='linear', init_type='glorot_uniform', 
-                  W_init=None, b_init=None, W_reg=None, b_reg=None, name=None ):
+                  W_init=None, b_init=None, W_reg=None, b_reg=None, trainable=True, name=None ):
                       
         super( Dense, self ).__init__( name )
         self._n_out_ = n_out
@@ -255,6 +255,7 @@ class Dense( Layer ):
         self._b_init_ = b_init
         self._W_reg_ = W_reg
         self._b_reg_ = b_reg
+        self._trainable_ = trainable
         
     def __call__( self, in_layers ):
         # merge
@@ -281,8 +282,7 @@ class Dense( Layer ):
         self._nexts_ = []
         self._out_shape_ = in_layers[0].out_shape_[0:-1] + (self._n_out_,)
         self._output_ = output
-        self._params_ = [ self._W_, self._b_ ]
-        self._reg_value_ = self._get_reg()
+        self.set_trainable( self._trainable_ )
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
@@ -315,6 +315,17 @@ class Dense( Layer ):
         return dict
         
     # ---------- Public methods ----------
+    
+    # set trainable True or False
+    def set_trainable( self, val ):
+        self._trainable_ = val
+        
+        if self._trainable_ is True:
+            self._params_ = [ self._W_, self._b_ ]
+            self._reg_value_ = self._get_reg()
+        else:
+            self._params_ = []
+            self._reg_value_ = 0.
     
     # load layer from info
     @classmethod

@@ -92,6 +92,13 @@ class Base( object ):
             n_params = self._num_of_params( layer )
             print f.format( layer.name_, str(layer.out_shape_), str(n_params) )
         print 
+        
+    # search and return layer from name
+    def find_layer( self, name ):
+        for layer in self._layer_list_:
+            if name==layer.name_:
+                return layer
+        raise Exception("No layer named " + name + "! ")
             
     # get number of params in a layer
     def _num_of_params( self, layer ):

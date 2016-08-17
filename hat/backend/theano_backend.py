@@ -150,10 +150,10 @@ def relu( x, alpha, max_value ):
 ### objectives
 # cross entropy loss. y_pred, y_gt should be 2D, DO NOT USE tensor.nnet.categorical_crossentropy
 def categorical_crossentropy( p_y_pred, y_gt ):
-    return T.mean( T.nnet.categorical_crossentropy( p_y_pred, y_gt ) )
+    return T.nnet.categorical_crossentropy( p_y_pred, y_gt )
     
 def binary_crossentropy( p_y_pred, y_gt ):
-    return T.mean( T.nnet.binary_crossentropy( p_y_pred, y_gt ) )
+    return T.nnet.binary_crossentropy( p_y_pred, y_gt )
     
 
 ### training phase node
