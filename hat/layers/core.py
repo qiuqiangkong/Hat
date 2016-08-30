@@ -77,7 +77,7 @@ class Layer( object ):
     # add layer to this layer's nexts pointer
     def add_next( self, next_layer ):
         self._nexts_.append( next_layer )
-
+        
     # -------- Private methods --------
     
     # Any class inherited this class should implement these attributes
@@ -93,7 +93,21 @@ class Layer( object ):
             return K.shared( initializations.get( init_type )( shape ), name )
         else:
             return K.shared( init_val, name )
-
+            
+    '''
+    # print debug message
+    def _print_msg_if_debug( self ):
+        if self._debug_mode_ is True:
+            print "------ " + self.__class__.__name__ + " ------"
+            print 'id: ', self._id_
+            print 'name: ', self._name_
+            print 'prevs: ', self._prevs_
+            print 'nexts: ', self._nexts_
+            print 'output: ', self._output_
+            print 'out_shape: ', self._out_shape_
+            print 'params: ', self._params_
+            print 'reg_value: ', self._reg_value_
+    '''
     # -------- Abstract attributes --------
     
     # layer's info & params (list of ndarray)
@@ -133,37 +147,17 @@ class Lambda( Layer ):
         # case 1: num_input_layer=1
         if len( in_layers ) == 1:
             assert 'input' in non_var_args, "Your Lamda function do not have 'input' argument! "
-            # overload 1, with in_shape argument
-            if 'in_shape' in non_var_args:
-                return_tuple = self._fn( inputs[0], in_shape=in_shapes[0], **self._kwargs_ )
-                assert len(to_tuple(return_tuple))==2, "Your must return output, out_shape in your Lambda function!"
-                (output, out_shape) = return_tuple
-                assert type(out_shape) is tuple, "Check your out_shape in your Lambda function!"
-            # overload 2, w/o in_shape argument
-            else:
-                 output = self._fn( inputs[0], **self._kwargs_ )
-                 out_shape = in_shapes[0]
+            output = self._fn( inputs[0], **self._kwargs_ )
                  
         # case 2: num_input_layer>1
         elif len( in_layers ) > 1:
             assert 'inputs' in non_var_args, "Your Lamda function do not have 'inputs' argument! "
-            # overload 1, with in_shape argument
-            if 'in_shapes' in non_var_args:
-                return_tuple = self._fn( inputs, in_shapes=in_shapes, **self._kwargs_ )
-                assert len(to_tuple(return_tuple))==2, "Your must return output, out_shape in your Lambda function!"
-                (output, out_shape) = return_tuple
-                assert type(out_shape) is tuple, "Check your out_shape in your Lambda function!"
-            # overload 2, w/o in_shape argument
-            else:
-                output = self._fn( inputs, **self._kwargs_ )
-                assert is_elem_equal( in_shapes ), "Your Input Layers' shapes are not same. Check your model! " \
-                        + "Or try add 'in_shapes' arguments and 'out_shape' to your Lambda function!"
-                out_shape = in_shapes[0]
-        
+            output = self._fn( inputs, **self._kwargs_ )
+            
         # assign attributes
         self._prevs_ = in_layers
         self._nexts_ = []
-        self._out_shape_ = out_shape
+        self._out_shape_ = self._calculate_out_shape( in_shapes )
         self._output_ = output
         self._params_ = []
         self._reg_value_ = 0.
@@ -192,6 +186,25 @@ class Lambda( Layer ):
     def load_from_info( cls, info ):
         layer = cls( info['fn'], info['name'], **info['kwargs'] )
         return layer
+        
+    # ---------- Private methods ------------
+    
+    # calculate out_shape by compiling
+    def _calculate_out_shape( self, in_shapes ):
+        us = []
+        dict = {}
+        for in_shape in in_shapes:
+            u = K.placeholder( len( in_shape ) )
+            tr_u = K.format_data( np.zeros( (1,)+in_shape[1:] ) )
+            us.append( u )
+            dict[u] = tr_u
+            
+        if len( in_shapes )==1:
+            shape = self._fn( us[0], **self._kwargs_ ).eval( dict ).shape
+        else:
+            shape = self._fn( us, **self._kwargs_ ).eval( dict ).shape
+            
+        return (None,) + shape[1:]
         
     # ---------------------------------------
 
@@ -261,7 +274,6 @@ class Dense( Layer ):
         # merge
         in_layers = to_list( in_layers )
         input = K.concatenate( [ layer.output_ for layer in in_layers ], axis=-1 )
-        #assert input.ndim==2, "Try add Flatten layer before Dense layer!"
         n_in = sum( [ layer.out_shape_[-1] for layer in in_layers ] )
         
         # init W
@@ -275,7 +287,10 @@ class Dense( Layer ):
             
         # output
         lin_out = K.dot( input, self._W_ ) + self._b_
-        output = activations.get( self._act_ )( lin_out )
+        if type(self._act_) is str:
+            output = activations.get( self._act_ )( lin_out )
+        else:
+            output = self._act_( lin_out )
         
         # assign attributes
         self._prevs_ = in_layers
