@@ -17,9 +17,12 @@ def linear( x ):
 def sigmoid( x ):
     return K.sigmoid( x )
 
+def hard_sigmoid( x ):
+    return K.hard_sigmoid( x )
+
 # x can be tensor
 def softmax( x ):
-    assert x.ndim==2    # todo
+    #assert x.ndim==2    # todo
     if x.ndim==2:
         return K.softmax( x )
     if x.ndim>2:
@@ -30,8 +33,13 @@ def softmax( x ):
 def tanh( x ):
     return K.tanh( x )
     
+    
+
 def relu( x, alpha=0., max_value=None ):
     return K.relu( x, alpha, max_value )
+    
+def zero( x ):
+    return K.zeros_like(x)
     
 def get( act ):
     f = globals().get( act )
