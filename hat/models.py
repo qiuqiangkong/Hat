@@ -149,7 +149,7 @@ class Base( object ):
 Supervised Model
 '''
 class Model( Base ):
-    def __init__( self, in_layers, out_layers, inter_layers=[] ):
+    def __init__( self, in_layers, out_layers, any_layers=[] ):
         super( Model, self ).__init__( in_layers )
 
         # out layers
@@ -158,9 +158,9 @@ class Model( Base ):
         self._out_nodes_ = [ layer.output_ for layer in self._out_layers_ ]
         
         # inter layers
-        inter_layers = to_list( inter_layers )
-        self._inter_layers_ = inter_layers
-        self._inter_nodes_ = [ layer.output_ for layer in self._inter_layers_ ]
+        any_layers = to_list( any_layers )
+        self._any_layers_ = any_layers
+        self._inter_nodes_ = [ layer.output_ for layer in self._any_layers_ ]
 
 
     def fit( self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], memory_mode=0, verbose=1 ):
@@ -282,19 +282,19 @@ class Model( Base ):
         dict = { 'epoch': self.epoch_, 
                  'in_ids': [ layer.id_ for layer in self._in_layers_ ], 
                  'out_ids': [ layer.id_ for layer in self._out_layers_ ], 
-                 'inter_ids': [layer.id_ for layer in self._inter_layers_] }
+                 'inter_ids': [layer.id_ for layer in self._any_layers_] }
         return dict
     
     @classmethod
-    def load_from_info( cls, in_layers, out_layers, inter_layers, info ):
-        md = cls( in_layers, out_layers, inter_layers )
+    def load_from_info( cls, in_layers, out_layers, any_layers, info ):
+        md = cls( in_layers, out_layers, any_layers )
         md._epoch_ = info['epoch']
         return md
 
 
 '''
 class Model( Base ):
-    def __init__( self, in_layers, out_layers, inter_layers=[] ):
+    def __init__( self, in_layers, out_layers, any_layers=[] ):
         super( Model, self ).__init__( in_layers )
 
         # out layers
@@ -303,9 +303,9 @@ class Model( Base ):
         self._out_nodes_ = [ layer.output_ for layer in self._out_layers_ ]
         
         # inter layers
-        inter_layers = to_list( inter_layers )
-        self._inter_layers_ = inter_layers
-        self._inter_nodes_ = [ layer.output_ for layer in self._inter_layers_ ]
+        any_layers = to_list( any_layers )
+        self._any_layers_ = any_layers
+        self._inter_nodes_ = [ layer.output_ for layer in self._any_layers_ ]
 
 
     def fit( self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], memory_mode=0, verbose=1 ):
@@ -463,12 +463,12 @@ class Model( Base ):
         dict = { 'epoch': self.epoch_, 
                  'in_ids': [ layer.id_ for layer in self._in_layers_ ], 
                  'out_ids': [ layer.id_ for layer in self._out_layers_ ], 
-                 'inter_ids': [layer.id_ for layer in self._inter_layers_] }
+                 'inter_ids': [layer.id_ for layer in self._any_layers_] }
         return dict
     
     @classmethod
-    def load_from_info( cls, in_layers, out_layers, inter_layers, info ):
-        md = cls( in_layers, out_layers, inter_layers )
+    def load_from_info( cls, in_layers, out_layers, any_layers, info ):
+        md = cls( in_layers, out_layers, any_layers )
         md._epoch_ = info['epoch']
         return md
 '''
