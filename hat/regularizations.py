@@ -125,3 +125,7 @@ def get( reg_type ):
         raise Exception( "Regularization " + reg_type + " does not exist! You should define it before using!" )
     else:
         return f
+        
+### register user defined regularization
+def register( reg ):
+    exec( reg.__name__ + " = reg", locals(), globals() )
