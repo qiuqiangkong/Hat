@@ -47,3 +47,7 @@ def get( act ):
         raise Exception( "No this activation!" )
     else:
         return f
+        
+### register user defined activation
+def register( act ):
+    exec( act.__name__ + " = act", locals(), globals() )
