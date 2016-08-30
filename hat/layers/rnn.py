@@ -4,6 +4,7 @@ AUTHOR:   Qiuqiang Kong
 Created:  2016.05.17
 Modified: 2016.05.21 Modify bug in LSTM
           2016.08.03 Add regularization, serialization to all rnn
+          2016.08.26 Modify SimpleRnn to high dimension version
 --------------------------------------
 '''
 from core import Layer
@@ -23,7 +24,7 @@ Base class of all variations of RNN
 class RnnBase( Layer ):
     __metaclass__ = ABCMeta
     
-    def __init__( self, n_out, act, return_sequence, go_backwards, masking, name ):
+    def __init__( self, n_out, act, return_sequence, go_backwards, masking, name, debug_mode ):
         super( RnnBase, self ).__init__( name )
         self._n_out_ = n_out
         self._act_ = act
@@ -31,15 +32,56 @@ class RnnBase( Layer ):
         self._go_backwards_ = go_backwards
         self._masking_ = masking
     
+    # ---------- Private methods ----------
+    
     @abstractmethod
     def _step( self ):
         pass
 
-    @abstractmethod
-    def _scan( self ):
-        pass
+    # # size(input): (n_batch, n1, n2, ..., n_time, n_in)
+    def _scan( self, input ):
+        # swap axes to make n_time as first dim to feed to scan function
+        # size(input_swap): (n_time, n1, n2, ..., n_batch, n_in)
+        input_swap = K.swapaxes( input, axis1=0, axis2=-2 )
         
+        # go backwards data (n_time axis)
+        if self._go_backwards_: 
+            input_swap = input_swap[::-1]
         
+        # info_shape_list: (n1, n2, ..., n_batch, n_out)
+        info_shape_tuple = ()
+        for i1 in xrange(1,input.ndim-1):
+            info_shape_tuple += ( input_swap.shape[i1], )
+        info_shape_tuple += ( self._n_out_, )
+        
+        # scan
+        result, update = K.scan( self._step, sequences=input_swap, outputs_info=[K.zeros(info_shape_tuple)] )
+        
+        # swap axes back, size(output): (n_batch, n1, n2, ..., n_time, n_out)
+        output = K.swapaxes( result, axis1=0, axis2=-2 )
+      
+        return output
+        
+    # get output
+    def _get_output( self, output ):
+        if self._return_sequence_ is True:
+            return output
+        else:
+            exec_str = "output = output["
+            exec_str += ":," * (output.ndim-2)
+            exec_str += "-1,:]"
+            exec exec_str
+            return output
+        
+    # get out_shape
+    def _get_out_shape( self, in_shape ):
+        if self._return_sequence_ is True:
+            out_shape = (None,) + in_shape[1:-1] + (self._n_out_,)
+        else:
+            out_shape = (None,) + in_shape[1:-2] + (self._n_out_,)
+        return out_shape
+        
+    # -------------------------------------
         
 '''
 Simple Rnn layer. 
@@ -48,9 +90,10 @@ Simple Rnn layer.
 class SimpleRnn( RnnBase ):
     def __init__( self, n_out, act, W_init_type='uniform', H_init_type='uniform', 
                   W_init=None, H_init=None, b_init=None, W_reg=None, H_reg=None, b_reg=None, 
+                  trainable_params=['W','H','b'], 
                   return_sequence=True, go_backwards=False, masking=False, name=None ):
         
-        super( SimpleRnn, self ).__init__( n_out, act, return_sequence, go_backwards, masking, name )
+        super( SimpleRnn, self ).__init__( n_out, act, return_sequence, go_backwards, masking, name, debug_mode )
         self._W_init_type_ = W_init_type
         self._H_init_type_ = H_init_type
         self._W_init_ = W_init
@@ -59,6 +102,7 @@ class SimpleRnn( RnnBase ):
         self._W_reg_ = W_reg
         self._H_reg_ = H_reg
         self._b_reg_ = b_reg
+        self._trainable_params_ = trainable_params
         
     def __call__( self, in_layers ):
         in_layers = to_list( in_layers )
@@ -67,12 +111,9 @@ class SimpleRnn( RnnBase ):
         
         in_shape = in_layer.out_shape_
         input = in_layer.output_
-        assert len(in_shape)==3, "The dim of input must be 3! Your shape is " + str(in_shape)
-        [ batch_size, n_time, n_in ] = in_shape
-        
-        # reverse data
-        if self._go_backwards_: input = input[::-1]
-        
+        assert len(in_shape)>=3, "The dim of input must >= 3! Your shape is " + str(in_shape)
+        n_in = in_shape[-1]
+
         # init parameters
         self._W_ = self._init_params( self._W_init_, self._W_init_type_, (n_in, self._n_out_), name=str(self._name_)+'_W' )
         self._H_ = self._init_params( self._H_init_, self._H_init_type_, (self._n_out_, self._n_out_), name=str(self._name_)+'_H' )
@@ -82,23 +123,18 @@ class SimpleRnn( RnnBase ):
         output = self._scan( input )
         
         # mask
+        '''
         if self._masking_==True:
             mask = get_mask( input )
             output *= mask[:,:,None]
-        
-        # if return_sequence=False only return the last value, size: batch_size*n_in
-        if self._return_sequence_ is False:
-            output = output[:,-1,:].flatten(2)
-            out_shape = (None, self._n_out_)
-        else:
-            out_shape = (None, n_time, self._n_out_)
-        
+        '''
+
         # assign attributes
         self._prevs_ = in_layers
         self._nexts_ = []
-        self._out_shape_ = out_shape
-        self._output_ = output
-        self._params_ = [ self._W_, self._H_, self._b_ ]
+        self._out_shape_ = self._get_out_shape( in_shape )
+        self._output_ = self._get_output( output )
+        self._set_trainable_params()
         self._reg_value_ = self._get_reg()
         
         # below are compulsory parts
@@ -159,19 +195,7 @@ class SimpleRnn( RnnBase ):
         
     # ---------- Private methods ----------
     
-    # size(input): batch_size*n_times*n_in
-    def _scan( self, input ):
-        assert input.ndim==3
-        batch_size, n_times, n_in = input.shape
-         
-        # to use scan, dimshuffle input to shape: n_times*batch_size*n_in
-        results, update = K.scan( self._step, sequences=input.dimshuffle(1,0,2), outputs_info=[K.zeros((batch_size, self._n_out_))] )
-        
-        # dimshuffle output back to shape: batch_size*n_times*n_in
-        output = results.dimshuffle(1,0,2)
-        return output
-    
-    # size(x): batch_size*n_in, size(h_): batch_size*n_out
+    # size(x): (n_batch, n1, n2, ..., n_in), size(h_): (n_batch, n1, n2, ..., n_out)
     def _step( self, x, h_ ):
         lin_out = K.dot( x, self._W_ ) + K.dot( h_, self._H_ ) + self._b_
         h = activations.get( self._act_ )( lin_out )
@@ -192,6 +216,15 @@ class SimpleRnn( RnnBase ):
             
         return reg_value
         
+    # set trainable params
+    def _set_trainable_params( self ):
+        legal_params = [ 'W', 'H', 'b' ]
+        self._params_ = []
+        for ch in self._trainable_params_:
+            assert ch in legal_params, "'ch' is not a param of " + self.__class__.__name__ + "! "
+            self._params_.append( self.__dict__[ '_'+ch+'_' ] )
+        
+        
     # -------------------------------------
         
 '''
@@ -200,30 +233,32 @@ class SimpleRnn( RnnBase ):
 [3] Zaremba, Wojciech. "An empirical exploration of recurrent network architectures." (2015).
 '''
 class LSTM( RnnBase ):
-    def __init__( self, n_out, act, gate_act='sigmoid', W_init_type='uniform', H_init_type='uniform', bf_bias=1., 
-                  Wg_init=None, Hg_init=None, bg_init=None, Wi_init=None, Hi_init=None, bi_init=None, 
-                  Wf_init=None, Hf_init=None, bf_init=None, Wo_init=None, Ho_init=None, bo_init=None, 
-                  W_reg=None, H_reg=None, return_sequence=True, go_backwards=False, masking=False, name=None ):
+    def __init__( self, n_out, act, gate_act='sigmoid', W_init_type='uniform', U_init_type='uniform', bf_bias=1., 
+                  Wg_init=None, Ug_init=None, bg_init=None, Wi_init=None, Ui_init=None, bi_init=None, 
+                  Wf_init=None, Uf_init=None, bf_init=None, Wo_init=None, Uo_init=None, bo_init=None, 
+                  trainable_params=[ 'Wg', 'Ug', 'bg', 'Wi', 'Ui', 'bi', 'Wo', 'Uo', 'bo', 'Wf', 'Uf', 'bf' ],
+                  W_reg=None, U_reg=None, return_sequence=True, go_backwards=False, masking=False, name=None ):
                       
         super( LSTM, self ).__init__( n_out, act, return_sequence, go_backwards, masking, name )
         self._gate_act_ = gate_act
         self._W_init_type_ = W_init_type
-        self._H_init_type_ = H_init_type
+        self._U_init_type_ = U_init_type
         self._bf_bias_ = bf_bias
         self._Wg_init_ = Wg_init
-        self._Hg_init_ = Hg_init
+        self._Ug_init_ = Ug_init
         self._bg_init_ = bg_init
         self._Wi_init_ = Wi_init
-        self._Hi_init_ = Hi_init
+        self._Ui_init_ = Ui_init
         self._bi_init_ = bi_init
         self._Wf_init_ = Wf_init
-        self._Hf_init_ = Hf_init
+        self._Uf_init_ = Uf_init
         self._bf_init_ = bf_init
         self._Wo_init_ = Wo_init
-        self._Ho_init_ = Ho_init
+        self._Uo_init_ = Uo_init
         self._bo_init_ = bo_init
         self._W_reg_ = W_reg
-        self._H_reg_ = H_reg
+        self._U_reg_ = U_reg
+        self._trainable_params_ = trainable_params
         
     def __call__( self, in_layers ):
         in_layers = to_list( in_layers )
@@ -241,19 +276,19 @@ class LSTM( RnnBase ):
         
         # ------ init parameters ------
         self._Wg_ = self._init_params( self._Wg_init_, self._W_init_type_, (n_in, self._n_out_), name=str(self.id_)+'_Wg' ) 
-        self._Hg_ = self._init_params( self._Hg_init_, self._H_init_type_, (self._n_out_, self._n_out_), name=str(self.id_)+'_Hg' )
+        self._Ug_ = self._init_params( self._Ug_init_, self._U_init_type_, (self._n_out_, self._n_out_), name=str(self.id_)+'_Ug' )
         self._bg_ = self._init_params( self._bg_init_, 'zeros', (self._n_out_,), name=str(self.id_)+'_bg' )
         self._Wi_ = self._init_params( self._Wi_init_, self._W_init_type_, (n_in, self._n_out_), name=str(self.id_)+'_Wi' )
-        self._Hi_ = self._init_params( self._Hi_init_, self._H_init_type_, (self._n_out_, self._n_out_), name=str(self.id_)+'_Hi' )
+        self._Ui_ = self._init_params( self._Ui_init_, self._U_init_type_, (self._n_out_, self._n_out_), name=str(self.id_)+'_Ui' )
         self._bi_ = self._init_params( self._bi_init_, 'zeros', (self._n_out_,), name=str(self.id_)+'_bi' )
         self._Wf_ = self._init_params( self._Wf_init_, self._W_init_type_, (n_in, self._n_out_), name=str(self.id_)+'_Wf' )
-        self._Hf_ = self._init_params( self._Hf_init_, self._H_init_type_, (self._n_out_, self._n_out_), name=str(self.id_)+'_Hf' )
+        self._Uf_ = self._init_params( self._Uf_init_, self._U_init_type_, (self._n_out_, self._n_out_), name=str(self.id_)+'_Uf' )
         
         if self._bf_init_ is None: self._bf_ = K.shared( self._bf_bias_*np.ones(self._n_out_), name=str(self.id_)+'_bf' )
         else: self._bf_ = K.shared( self._bf_init_, name=str(self.id_)+'_bf' )
         
         self._Wo_ = self._init_params( self._Wo_init_, self._W_init_type_, (n_in, self._n_out_), name=str(self.id_)+'_Wo' )
-        self._Ho_ = self._init_params( self._Ho_init_, self._H_init_type_, (self._n_out_, self._n_out_), name=str(self.id_)+'_Ho' )
+        self._Uo_ = self._init_params( self._Uo_init_, self._U_init_type_, (self._n_out_, self._n_out_), name=str(self.id_)+'_Uo' )
         self._bo_ = self._init_params( self._bo_init_, 'zeros', (self._n_out_,), name=str(self.id_)+'_bo' )
  
         # scan
@@ -276,8 +311,7 @@ class LSTM( RnnBase ):
         self._nexts_ = []
         self._out_shape_ = out_shape
         self._output_ = output
-        self._params_ = [ self._Wg_, self._Hg_, self._bg_, self._Wi_, self._Hi_, self._bi_, 
-                         self._Wf_, self._Hf_, self._bf_, self._Wo_, self._Ho_, self._bo_ ]
+        self._set_trainable_params()
         self._reg_value_ = self._get_reg()
         
         # below are compulsory parts
@@ -291,7 +325,7 @@ class LSTM( RnnBase ):
     def Wg_( self ): return K.get_value( self._Wg_ )
     
     @property
-    def Hg_( self ): return K.get_value( self._Hg_ )
+    def Ug_( self ): return K.get_value( self._Ug_ )
     
     @property
     def bg_( self ): return K.get_value( self._bg_ )
@@ -300,7 +334,7 @@ class LSTM( RnnBase ):
     def Wi_( self ): return K.get_value( self._Wi_ )
     
     @property
-    def Hi_( self ): return K.get_value( self._Hi_ )
+    def Ui_( self ): return K.get_value( self._Ui_ )
     
     @property
     def bi_( self ): return K.get_value( self._bi_ )
@@ -309,7 +343,7 @@ class LSTM( RnnBase ):
     def Wf_( self ): return K.get_value( self._Wf_ )
     
     @property
-    def Hf_( self ): return K.get_value( self._Hf_ )
+    def Uf_( self ): return K.get_value( self._Uf_ )
     
     @property
     def bf_( self ): return K.get_value( self._bf_ )
@@ -318,7 +352,7 @@ class LSTM( RnnBase ):
     def Wo_( self ): return K.get_value( self._Wo_ )
     
     @property
-    def Ho_( self ): return K.get_value( self._Ho_ )
+    def Uo_( self ): return K.get_value( self._Uo_ )
     
     @property
     def bo_( self ): return K.get_value( self._bo_ )
@@ -332,14 +366,14 @@ class LSTM( RnnBase ):
                  'act': self._act_, 
                  'gate_act': self._gate_act_, 
                  'W_init_type': self._W_init_type_, 
-                 'H_init_type': self._H_init_type_, 
+                 'U_init_type': self._U_init_type_, 
                  'bf_bias': self._bf_bias_, 
-                 'Wg': self.Wg_, 'Hg': self.Hg_, 'bg': self.bg_, 
-                 'Wi': self.Wi_, 'Hi': self.Hi_, 'bi': self.bi_, 
-                 'Wf': self.Wf_, 'Hf': self.Hf_, 'bf': self.bf_, 
-                 'Wo': self.Wo_, 'Ho': self.Ho_, 'bo': self.bo_, 
+                 'Wg': self.Wg_, 'Ug': self.Ug_, 'bg': self.bg_, 
+                 'Wi': self.Wi_, 'Ui': self.Ui_, 'bi': self.bi_, 
+                 'Wf': self.Wf_, 'Uf': self.Uf_, 'bf': self.bf_, 
+                 'Wo': self.Wo_, 'Uo': self.Uo_, 'bo': self.bo_, 
                  'W_reg_info': regularizations.get_info( self._W_reg_ ), 
-                 'H_reg_info': regularizations.get_info( self._H_reg_ ), 
+                 'U_reg_info': regularizations.get_info( self._U_reg_ ), 
                  'return_sequence': self._return_sequence_, 
                  'go_backwards': self._go_backwards_, 
                  'masking': self._masking_, 
@@ -353,15 +387,15 @@ class LSTM( RnnBase ):
     @classmethod
     def load_from_info( cls, info ):
         W_reg = regularizations.get_obj( info['W_reg_info'] )
-        H_reg = regularizations.get_obj( info['H_reg_info'] )
+        U_reg = regularizations.get_obj( info['U_reg_info'] )
 
         layer = cls( n_out=info['n_out'], act=info['act'], gate_act=info['gate_act'],
-                     W_init_type=info['W_init_type'], H_init_type=info['H_init_type'], bf_bias=info['bf_bias'], 
-                     Wg_init=info['Wg'], Hg_init=info['Hg'], bg_init=info['bg'], 
-                     Wi_init=info['Wi'], Hi_init=info['Hi'], bi_init=info['bi'], 
-                     Wf_init=info['Wf'], Hf_init=info['Hf'], bf_init=info['bf'], 
-                     Wo_init=info['Wo'], Ho_init=info['Ho'], bo_init=info['bo'], 
-                     W_reg=W_reg, H_reg=H_reg, 
+                     W_init_type=info['W_init_type'], U_init_type=info['U_init_type'], bf_bias=info['bf_bias'], 
+                     Wg_init=info['Wg'], Ug_init=info['Ug'], bg_init=info['bg'], 
+                     Wi_init=info['Wi'], Ui_init=info['Ui'], bi_init=info['bi'], 
+                     Wf_init=info['Wf'], Uf_init=info['Uf'], bf_init=info['bf'], 
+                     Wo_init=info['Wo'], Uo_init=info['Uo'], bo_init=info['bo'], 
+                     W_reg=W_reg, U_reg=U_reg, 
                      return_sequence=info['return_sequence'], go_backwards=info['go_backwards'], 
                      masking=info['masking'], name=info['name'] )
                      
@@ -382,10 +416,10 @@ class LSTM( RnnBase ):
         return output
         
     def _step( self, x, s_, h_ ):
-        g = activations.get( self._act_ )( K.dot( x, self._Wg_ ) + K.dot( h_, self._Hg_ ) + self._bg_ )
-        i = activations.get( self._gate_act_ )( K.dot( x, self._Wi_ ) + K.dot( h_, self._Hi_ ) + self._bi_ )
-        f = activations.get( self._gate_act_ )( K.dot( x, self._Wf_ ) + K.dot( h_, self._Hf_ ) + self._bf_ )
-        o = activations.get( self._gate_act_ )( K.dot( x, self._Wo_ ) + K.dot( h_, self._Ho_ ) + self._bo_ )
+        g = activations.get( self._act_ )( K.dot( x, self._Wg_ ) + K.dot( h_, self._Ug_ ) + self._bg_ )
+        i = activations.get( self._gate_act_ )( K.dot( x, self._Wi_ ) + K.dot( h_, self._Ui_ ) + self._bi_ )
+        f = activations.get( self._gate_act_ )( K.dot( x, self._Wf_ ) + K.dot( h_, self._Uf_ ) + self._bf_ )
+        o = activations.get( self._gate_act_ )( K.dot( x, self._Wo_ ) + K.dot( h_, self._Uo_ ) + self._bo_ )
         s = g * i + s_ * f
         h = s * o
         return s, h
@@ -397,11 +431,20 @@ class LSTM( RnnBase ):
         if self._W_reg_ is not None:
             reg_value += self._W_reg_.get_reg( [self._Wg_, self._Wi_, self._Wf_, self._Wo_] )
         
-        if self._H_reg_ is not None:
-            reg_value += self._H_reg_.get_reg( [self._Hg_, self._Hi_, self._Hf_, self._Ho_] )
+        if self._U_reg_ is not None:
+            reg_value += self._U_reg_.get_reg( [self._Ug_, self._Ui_, self._Uf_, self._Uo_] )
             
         return reg_value
         
+    # set trainable params
+    def _set_trainable_params( self ):
+        legal_params = [ 'Wg', 'Ug', 'bg', 'Wi', 'Ui', 'bi', 
+                         'Wo', 'Uo', 'bo', 'Wf', 'Uf', 'bf' ]
+        self._params_ = []
+        for ch in self._trainable_params_:
+            assert ch in legal_params, "'ch' is not a param of " + self.__class__.__name__ + "! "
+            self._params_.append( self.__dict__[ '_'+ch+'_' ] )
+            
     # -------------------------------------
         
         
@@ -583,8 +626,9 @@ class GRU( RnnBase ):
             reg_value += self._W_reg_.get_reg( [self._Wr_, self._Wz_, self._W_] )
         
         if self._U_reg_ is not None:
-            reg_value += self._H_reg_.get_reg( [self._Ur_, self._Uz_, self._U_] )
+            reg_value += self._U_reg_.get_reg( [self._Ur_, self._Uz_, self._U_] )
             
         return reg_value
         
     # -------------------------------------
+    
