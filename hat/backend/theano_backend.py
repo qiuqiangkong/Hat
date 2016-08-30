@@ -88,8 +88,11 @@ def pool2d( input, ds, ignore_border=True, st=None, padding=(0, 0), mode='max' )
     if mode=='avg': mode='average_exc_pad'
     return pool.pool_2d( input, ds, ignore_border, st, padding, mode )
     
-def concatenate( inputs, axis ):
+def concatenate( inputs, axis=0 ):
     return T.concatenate( inputs, axis )
+    
+def stack( tensors, axis=0 ):
+    return T.stack( tensors, axis )
     
 def ndim( x ):
     return x.ndim
@@ -102,6 +105,9 @@ def argmax( x, axis=None ):
     
 def clip( x, min_, max_ ):
     return T.clip( x, min_, max_ )
+    
+def tile( x, reps, ndim=None ):
+    return T.tile( x, reps, ndim )
     
 def eq( a, b ):
     return T.eq( a, b )
@@ -117,6 +123,9 @@ def lt( a, b ):
     
 def ifelse( condition, op1, op2 ):
     return theano.ifelse.ifelse( condition, op1, op2 )
+    
+def swapaxes( x, axis1, axis2 ):
+    return T.swapaxes( x, axis1, axis2 )
     
 ### random number
 def rng_normal( size, avg, std ):
@@ -139,6 +148,9 @@ def tanh( x ):
     
 def sigmoid( x ):
     return T.nnet.sigmoid( x )
+    
+def hard_sigmoid( x ):
+    return T.nnet.hard_sigmoid( x )
     
 def relu( x, alpha, max_value ):
     y = T.nnet.relu( x, alpha )
@@ -163,6 +175,7 @@ common_tr_phase_node = placeholder( n_dim=0, name='tr_phase_node' )
 ### functions
 # theano function, without givens
 # using method eg. f( x, 0. )
+
 def function_no_given( input_nodes, tr_phase_node, output_nodes, updates=None ):
     #f = theano.function( input_nodes + [tr_phase_node], output_nodes, on_unused_input='warn' )
     f = theano.function( input_nodes + [tr_phase_node], output_nodes, updates=updates, on_unused_input='ignore' )
