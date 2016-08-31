@@ -358,10 +358,10 @@ class Dense( Layer ):
     # get regularization
     def _get_reg( self ):
         reg_value = 0. 
-        
+
         if self._W_reg_ is not None:
             reg_value += self._W_reg_.get_reg( [self._W_] )
-            
+
         if self._b_reg_ is not None:
             reg_value += self._b_reg_.get_reg( [self._b_] )
             
