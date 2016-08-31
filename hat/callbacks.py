@@ -17,6 +17,7 @@ import numpy as np
 import time
 from supports import to_list
 import sys
+from inspect import isfunction
 
 
 
@@ -138,10 +139,12 @@ class Validation( Callback ):
                                                 + "out_node of out_layers must match ground truth!"
                 loss_node = sum( [ obj.get( metric )( pred_node, gt_node ) 
                                 for pred_node, gt_node in zip( self._md_.out_nodes_, gt_nodes ) ] )
-            # if user define their objective
+            # if user define their objective function
+            elif isfunction( metric ):
+                loss_node = metric( self._md_.out_nodes_, self._md_.any_nodes_, gt_nodes )
+            # if node
             else:
-                loss_func = metric
-                loss_node = loss_func( self._md_.out_nodes_, self._md_.inter_nodes_, gt_nodes )
+                loss_node = metric
                 
             loss_nodes.append( loss_node )
         
@@ -197,8 +200,10 @@ class Validation( Callback ):
     def _to_str( self, a ):
         if type(a) is str:
             return a
-        else:
+        elif isfunction( a ):
             return a.__name__
+        else:
+            return 'reg_value'
         
 '''
 Save Model every n-epoches
