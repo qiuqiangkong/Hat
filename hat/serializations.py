@@ -13,8 +13,8 @@ from layers.pool import *
 from layers.rnn import *
 from models import *
 
-### save model
-def save( md, path ):
+### get data segment of model
+def get_model_data_seg( md ):
     # find all nodes using BFT
     id_list, layer_list = BFT( md.in_layers_ )
     n_layers = len( id_list )
@@ -42,13 +42,20 @@ def save( md, path ):
         # add atom to list
         atom_list.append( atom )
         
-    md_pure_data = {}
-    md_pure_data['class_name'] = md.__class__.__name__
-    md_pure_data['info'] = md.info_
-    md_pure_data['atom_list'] = atom_list
+    md_data_seg = {}
+    md_data_seg['class_name'] = md.__class__.__name__
+    md_data_seg['info'] = md.info_
+    md_data_seg['atom_list'] = atom_list
+    
+    return md_data_seg
+    
+### save model
+def save( md, path ):
+    # get data segment of model
+    md_data_seg = get_model_data_seg( md )
         
     # dump
-    cPickle.dump( md_pure_data, open( path, 'wb' ), protocol=cPickle.HIGHEST_PROTOCOL )
+    cPickle.dump( md_data_seg, open( path, 'wb' ), protocol=cPickle.HIGHEST_PROTOCOL )
         
 ### load model
 def load( path ):
@@ -82,11 +89,11 @@ def load( path ):
     
     
     # load serialized data
-    md_pure_data = cPickle.load( open( path, 'rb' ) )
+    md_data_seg = cPickle.load( open( path, 'rb' ) )
     
-    md_info = md_pure_data['info']
-    md_func = globals().get( md_pure_data['class_name'] )
-    atom_list = md_pure_data['atom_list']
+    md_info = md_data_seg['info']
+    md_func = globals().get( md_data_seg['class_name'] )
+    atom_list = md_data_seg['atom_list']
     
     # create layer from atom one by one
     layer_list = []
