@@ -8,6 +8,7 @@ Modified: 2016.07.25 Modify fit() to batch version
 '''
 import sys
 from supports import to_list, BFT, shuffle, memory_usage
+import supports
 from optimizers import *
 from globals import reset_id_to_zero
 import activations
@@ -69,8 +70,8 @@ class Base( object ):
         return self._out_nodes_
         
     @property
-    def inter_nodes_( self ):
-        return self._inter_nodes_
+    def any_nodes_( self ):
+        return self._any_nodes_
     
     
     @property
@@ -85,6 +86,12 @@ class Base( object ):
     def tr_phase_node_( self ):
         return self._tr_phase_node_
         
+    @property
+    def reg_value_( self ):
+        return self._reg_value_
+        
+    # ---------- Public methods ----------
+    
     def summary( self ):
         print '---------- summary -----------'
         f = "{0:<20} {1:<20} {2:<20}"
@@ -100,20 +107,6 @@ class Base( object ):
             if name==layer.name_:
                 return layer
         raise Exception("No layer named " + name + "! ")
-            
-    # get number of params in a layer
-    def _num_of_params( self, layer ):
-        n_params = 0
-        for param in layer.params_:
-            n_params += np.prod( K.get_value( param ).shape )
-        return n_params
-        
-    # check if the dim of output is correct
-    def _check_data( self, y, loss_func ):
-        if loss_func in ['categorical_crossentropy', 'binary_crossentropy', 'kl_divergence']:
-            for e in y:
-                assert e.ndim!=1, "your y.ndim is 1, try use sparse_to_categorical(y)"
-        
 
     def plot_connection( self ):
         G = nx.DiGraph()
@@ -145,6 +138,23 @@ class Base( object ):
         except:
             print "Warning! You do not have graphic interface to plot connection! "
 
+    # ---------- Private methods ----------
+
+    # get number of params in a layer
+    def _num_of_params( self, layer ):
+        n_params = 0
+        for param in layer.params_:
+            n_params += np.prod( K.get_value( param ).shape )
+        return n_params
+        
+    # check if the dim of output is correct
+    def _check_data( self, y, loss_func ):
+        if loss_func in ['categorical_crossentropy', 'binary_crossentropy', 'kl_divergence']:
+            for e in y:
+                assert e.ndim!=1, "your y.ndim is 1, try use sparse_to_categorical(y)"
+                
+    # ------------------------------------
+
 '''
 Supervised Model
 '''
@@ -160,10 +170,10 @@ class Model( Base ):
         # inter layers
         any_layers = to_list( any_layers )
         self._any_layers_ = any_layers
-        self._inter_nodes_ = [ layer.output_ for layer in self._any_layers_ ]
+        self._any_nodes_ = [ layer.output_ for layer in self._any_layers_ ]
 
 
-    def fit( self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], memory_mode=0, verbose=1 ):
+    def fit( self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], shuffle=True, verbose=1 ):
         x = to_list( x )
         y = to_list( y )
         
@@ -172,7 +182,8 @@ class Model( Base ):
         y = [ K.format_data(e) for e in y ]
         
         # shuffle data
-        x, y = shuffle( x, y )
+        if shuffle:
+            x, y = supports.shuffle( x, y )
         
         # check data
         self._check_data( y, loss_func )
@@ -192,7 +203,7 @@ class Model( Base ):
                             for pred_node, gt_node in zip( self._out_nodes_, gt_nodes ) ] )
         # user defined objective
         else:
-            loss_node = loss_func( self._out_nodes_, self._inter_nodes_, gt_nodes )
+            loss_node = loss_func( self._out_nodes_, self._any_nodes_, gt_nodes )
          
         # gradient
         gparams = K.grad( loss_node + self._reg_value_, self._params_ )
@@ -305,7 +316,7 @@ class Model( Base ):
         # inter layers
         any_layers = to_list( any_layers )
         self._any_layers_ = any_layers
-        self._inter_nodes_ = [ layer.output_ for layer in self._any_layers_ ]
+        self._any_nodes_ = [ layer.output_ for layer in self._any_layers_ ]
 
 
     def fit( self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], memory_mode=0, verbose=1 ):
@@ -339,7 +350,7 @@ class Model( Base ):
                             for pred_node, gt_node in zip( self._out_nodes_, gt_nodes ) ] )
         # user defined objective
         else:
-            loss_node = loss_func( self._out_nodes_, self._inter_nodes_, gt_nodes )
+            loss_node = loss_func( self._out_nodes_, self._any_nodes_, gt_nodes )
          
         # gradient
         gparams = K.grad( loss_node + self._reg_value_, self._params_ )
