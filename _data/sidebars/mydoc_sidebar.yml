@@ -8,8 +8,8 @@ entries:
 
 
   - title: Overview
+	url: /overview.html
     output: web, pdf
-	url: /
 
   - title: Installation
     output: web, pdf
