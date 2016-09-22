@@ -5,7 +5,7 @@ entries:
   levels: one
   folders:
 
-  - title: Products
+  - title: asdf
     output: web
     folderitems:
     - title: News
