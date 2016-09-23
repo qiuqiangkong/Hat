@@ -121,3 +121,6 @@ pred_y = md.predict( te_X )
 
 <br>
 The source code can be found here <a href="https://github.com/qiuqiangkong/Hat/blob/master/examples/mnist/main_dnn.py">main_dnn.py</a> and ran without modification. To run it you need <a href="https://github.com/qiuqiangkong/Hat/blob/master/examples/mnist/prepare_data.py">prepare_data.py</a>
+
+<br>
+For more examples, please click the next section <a href="/more_examples.html">More Examples</a>.

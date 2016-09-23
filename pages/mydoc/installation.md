@@ -8,9 +8,6 @@ toc: false
 
 
 
-Hat is an open source deep learning framework. We would like to thank Keras, from which we folked a lot of codes. Keras is excellent, with clear code and structure. Compared with Keras, Hat is a deep learning framework provides more functions for (but not limited to) audio processing. Hat allows users to build their neural network in a more flexible way, with a lot of example codes for audio processing. 
-
-
 ## Installation
 
 
@@ -22,7 +19,7 @@ Hat is an open source deep learning framework. We would like to thank Keras, fro
 </ul>
 
 <br>
-<b>Install Hat using pip</b>
+<b>Install Hat using pip (recommanded)</b>
 
 ```liquid
 $ pip install hat
@@ -32,6 +29,15 @@ For updating the package, you can specify upgrade argument
 
 ```liquid
 $ pip install hat --upgrade
+```
+
+<br>
+<b>Using Source Code</b><br>
+You can use the source code without installation <a href="https://github.com/qiuqiangkong/Hat">https://github.com/qiuqiangkong/Hat</a>. You need to add following code to append path in every file you use Hat. 
+
+```
+import sys
+sys.path.append('xxx/Hat')
 ```
 
 ## Write your first NN

@@ -30,3 +30,7 @@ entries:
     - title: Mnist Recognition
       url: /mnist_recognition.html
       output: web, pdf
+
+    - title: More Examples
+      url: /more_examples.html
+      output: web, pdf
