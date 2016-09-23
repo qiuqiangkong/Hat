@@ -93,7 +93,7 @@ class SimpleRnn( RnnBase ):
                   trainable_params=['W','H','b'], 
                   return_sequence=True, go_backwards=False, masking=False, name=None ):
         
-        super( SimpleRnn, self ).__init__( n_out, act, return_sequence, go_backwards, masking, name, debug_mode )
+        super( SimpleRnn, self ).__init__( n_out, act, return_sequence, go_backwards, masking, name, debug_mode=False )
         self._W_init_type_ = W_init_type
         self._H_init_type_ = H_init_type
         self._W_init_ = W_init
@@ -239,7 +239,7 @@ class LSTM( RnnBase ):
                   trainable_params=[ 'Wg', 'Ug', 'bg', 'Wi', 'Ui', 'bi', 'Wo', 'Uo', 'bo', 'Wf', 'Uf', 'bf' ],
                   W_reg=None, U_reg=None, return_sequence=True, go_backwards=False, masking=False, name=None ):
                       
-        super( LSTM, self ).__init__( n_out, act, return_sequence, go_backwards, masking, name )
+        super( LSTM, self ).__init__( n_out, act, return_sequence, go_backwards, masking, name, debug_mode=False )
         self._gate_act_ = gate_act
         self._W_init_type_ = W_init_type
         self._U_init_type_ = U_init_type
@@ -458,7 +458,7 @@ class GRU( RnnBase ):
                   Wr_init=None, Ur_init=None, br_init=None, Wz_init=None, Uz_init=None, bz_init=None, 
                   W_init=None, U_init=None, b_init=None, W_reg=None, U_reg=None, 
                   return_sequence=True, go_backwards=False, masking=False, name=None ):
-        super( GRU, self ).__init__( n_out, act, return_sequence, go_backwards, masking, name )
+        super( GRU, self ).__init__( n_out, act, return_sequence, go_backwards, masking, name, debug_mode=False )
         self._gate_act_ = gate_act
         self._W_init_type_ = W_init_type
         self._U_init_type_ = U_init_type
