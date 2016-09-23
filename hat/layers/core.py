@@ -257,7 +257,7 @@ class InputLayer( Layer ):
 Dense Layer
 '''
 class Dense( Layer ):
-    def __init__( self, n_out, act='linear', init_type='glorot_uniform', 
+    def __init__( self, n_out, act, init_type='glorot_uniform', 
                   W_init=None, b_init=None, W_reg=None, b_reg=None, trainable=True, name=None ):
                       
         super( Dense, self ).__init__( name )
@@ -277,10 +277,7 @@ class Dense( Layer ):
         n_in = sum( [ layer.out_shape_[-1] for layer in in_layers ] )
         
         # init W
-        if self._act_=='softmax':
-            self._W_ = self._init_params( self._W_init_, 'zeros', shape=(n_in, self._n_out_), name=str(self._name_)+'_W' )
-        else:
-            self._W_ = self._init_params( self._W_init_, self._init_type_, shape=(n_in, self._n_out_), name=str(self._name_)+'_W' )
+        self._W_ = self._init_params( self._W_init_, self._init_type_, shape=(n_in, self._n_out_), name=str(self._name_)+'_W' )
 
         # init b
         self._b_ = self._init_params( self._b_init_, 'zeros', shape=(self._n_out_,), name=str(self._id_)+'_b' )
@@ -497,6 +494,59 @@ class Flatten( Layer ):
 
 
 
+class Activation( Layer ):
+    def __init__( self, act_func, name=None ):
+        super( Activation, self ).__init__( name )
+        self._act_func = act_func
+        
+    def __call__( self, in_layers ):
+        # only one input layer is allowed
+        in_layers = to_list( in_layers )
+        assert len(in_layers)==1, "The input of Activation can only be one layer!"
+        in_layer = in_layers[0]
+        input = in_layer.output_
+        
+        # non linearity transform
+        if type( self._act_func ) is str:
+            output = activations.get( self._act_func )( input )
+        if callable( self._act_func ):
+            output = self._act_func( input )
+        
+        # assign attributes
+        self._prevs_ = in_layers
+        self._nexts_ = []
+        self._out_shape_ = in_layer.out_shape_
+        self._output_ = output
+        self._params_ = []
+        self._reg_value_ = 0.
+        
+        # below are compulsory parts
+        [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
+        self._check_attributes()                             # check if all attributes are implemented
+        return self
+        
+    # ---------- Public attributes ----------
+        
+    # layer's info
+    @property
+    def info_( self ):
+        dict = { 'act_func': self._act_func, 
+                 'class_name': self.__class__.__name__, 
+                 'id': self._id_, 
+                 'name': self._name_ }
+        return dict
+           
+    # ---------- Public methods ----------
+           
+    # load layer from info
+    @classmethod
+    def load_from_info( cls, info ):
+        layer = cls( act_func=info['act_func'], name=info['name'] )
+        return layer
+
+    # ------------------------------------
+
+
 '''
 Dropout layer
 '''
@@ -565,71 +615,3 @@ class Dropout( Layer ):
     
            
     
-    
-
-# todo
-'''
-Batch normalization layer
-'''
-class BN( Layer ):
-    def __init__( self, name=None ):
-        super( BN, self ).__init__( name )
-        self._epsilon = 1e-8
-        self._momentum = 0.9
-        self._global_mean = 0.
-        self._global_var = 0.
-        self._tr_phase_node = K.tr_phase_node
-        
-    def __call__( self, in_layers ):
-        # only one input layer is allowed
-        in_layers = to_list( in_layers )
-        assert len(in_layers)==1, "The input of Dense can only be one layer!"
-        in_layer = in_layers[0]
-        
-        # init params
-        assert len( in_layer.out_shape_ )==2, "Only support 2 dim input batch normalization!"
-        input = in_layer.output
-        n_in = in_layer.out_shape_[1]
-        self._gamma = initializations.get( 'ones' )( n_in, name=self._name+'_gamma' )
-        self._beta = initializations.get( 'zeros' )( n_in, name=self._name+'_beta' )
-        
-        # do batch normalization
-        output = K.ifelse( K.eq( self._tr_phase_node, 1. ), self._tr_phase(input), self._te_phase(input) )
-
-        # assign attributes
-        self._prevs = in_layers
-        self._nexts = []
-        self._out_shape = in_layer.out_shape_
-        self._output = output
-        self._params = [ self._gamma, self._beta ]
-        self._reg_value = 0.
-        
-        # below are compulsory parts
-        [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
-        self.check_attributes()                             # check if all attributes are implemented
-        return self
-        
-    def _tr_phase( self, input ):
-        mean_ = K.mean( input, axis=0 )             # size: n_in
-        var_ = K.sqr( K.std( input, axis=0 ) )      # size: n_in
-        x_hat = input / K.sqrt( var_ + self._epsilon )
-        output = x_hat * self._gamma + self._beta
-        
-        # update global mean & var
-        # this implementation ignore the m/(m-1) of var where m is batch_size compared with original paper
-        self._global_mean = self._momentum * self._global_mean + ( 1 - self._momentum ) * mean_
-        self._global_var = self._momentum * self._global_var + ( 1 - self._momentum ) * var_
-        
-        return output
-        
-    def _te_phase( self, input ):
-        output = ( input - self._global_mean ) / K.sqrt( self._global_var + self._epsilon ) * self._gamma + self._beta
-        return output
-        
-    @property
-    def gamma( self ):
-        return self._gamma
-        
-    @property
-    def beta( self ):
-        return self._beta
