@@ -63,12 +63,13 @@ metric_types can be list or string
 '''
 class Validation( Callback ):
     def __init__( self, tr_x=None, tr_y=None, va_x=None, va_y=None, te_x=None, te_y=None, batch_size=100,
-                  call_freq=3, metrics=['categorical_error'], dump_path='validation.p'):
+                  call_freq=3, metrics=['categorical_error'], dump_path='validation.p', verbose=1):
         # init values
         self._batch_size_ = batch_size
         self._call_freq_ = call_freq
         self._metrics_ = to_list( metrics )
         self._dump_path_ = dump_path
+        self._verbose_ = verbose
         self._r_ = self._init_result()
         
         # judge if train or valid or test data exists
@@ -112,6 +113,10 @@ class Validation( Callback ):
         self._f_pred = K.function_no_given( input_nodes, md.tr_phase_node_, md.out_nodes_ )
         self._md_ = md
         
+        # memory usage
+        print "Callback", 
+        self._md_._show_memory_usage( self._md_._layer_list_, self._batch_size_ )
+        
  
     def call( self ):
         t1 = time.time()
@@ -122,7 +127,8 @@ class Validation( Callback ):
         self._r_['cb_time'] += t2 - t1
         self._r_['epoch'] = self._md_.epoch_
         self._r_['tr_time'] = self._md_.tr_time_
-        pickle.dump( self._r_, open( self._dump_path_, 'wb' ) )
+        if self._dump_path_ is not None:
+            pickle.dump( self._r_, open( self._dump_path_, 'wb' ) )
         print
         
     def _evaluate( self, x, y, eval_type ):
@@ -174,6 +180,7 @@ class Validation( Callback ):
                         + [ e[i1*self._batch_size_ : min( (i1+1)*self._batch_size_, N ) ] for e in y ] + [0.]
                 batch_metric_vals = np.array( self._f_evaluate( *in_list ) )
                 metric_vals += batch_metric_vals * curr_batch_size
+                if self._verbose_==1: self._print_progress( batch_num, i1 )
                 
             metric_vals /= N
             
