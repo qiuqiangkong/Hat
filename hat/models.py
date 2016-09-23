@@ -37,6 +37,12 @@ class Base( object ):
         self._params_ = []
         for layer in self._layer_list_:
             self._params_ += layer.params_
+        
+        # get inner updates by traveling all layers
+        self._inner_updates_ = []
+        for layer in self._layer_list_:
+            if hasattr( layer, 'inner_updates_' ):
+                self._inner_updates_ += layer.inner_updates_
             
         # sum regs by traveling all layers
         self._reg_value_ = 0.
@@ -50,11 +56,7 @@ class Base( object ):
         self._tr_time_ = 0.
         self._epoch_ = 0
     
-    # print progress on screen
-    def _print_progress( self, epoch, batch_num, curr_batch_num ):
-        #sys.stdout.write("%d-th epoch %d%%   %s %f \r" % ( epoch, float(curr_batch_num)/float(batch_num)*100, 'tr_loss:', loss ) )
-        sys.stdout.write("%d-th epoch %d%% \r" % ( epoch, float(curr_batch_num)/float(batch_num)*100 ) )
-        sys.stdout.flush()
+    
         
     @property
     def in_layers_( self ):
@@ -147,6 +149,27 @@ class Base( object ):
             n_params += np.prod( K.get_value( param ).shape )
         return n_params
         
+    # print memory usage
+    def _show_memory_usage( self, layer_list, batch_size ):
+        n_data_ary = []
+        for layer in layer_list:
+            n_data_ary.append( np.prod( layer.out_shape_[1:] ) * batch_size )
+        
+        n_data_total = np.sum( n_data_ary )
+        n_byte_total = n_data_total * 4   # float32 
+        n_byte_total *= 2                 # forward & backward
+        print "Total memory usage:", n_byte_total / 1e6, "MB"
+        
+    # flush progress on screen
+    def _print_progress( self, epoch, batch_num, curr_batch_num ):
+        sys.stdout.write("%d-th epoch %d%% \r" % ( epoch, float(curr_batch_num)/float(batch_num)*100 ) )
+        sys.stdout.flush()
+    
+    # flush progress and train loss on screen
+    def _print_progress_loss( self, epoch, batch_num, curr_batch_num, loss ):
+        sys.stdout.write("%d-th epoch %d%%   %s %f \r" % ( epoch, float(curr_batch_num)/float(batch_num)*100, 'tr_loss:', loss ) )
+        sys.stdout.flush()
+        
     # check if the dim of output is correct
     def _check_data( self, y, loss_func ):
         if loss_func in ['categorical_crossentropy', 'binary_crossentropy', 'kl_divergence']:
@@ -192,8 +215,8 @@ class Model( Base ):
         gt_nodes = [ K.placeholder( e.ndim ) for e in y ]
         
         # memory usage
-        #mem_usage = memory_usage( x, y )
-        #print 'memory usage:', mem_usage / 8e6, 'Mb'
+        print "Train", 
+        self._show_memory_usage( self._layer_list_, batch_size )
         
         # default objective
         if type(loss_func) is str:
@@ -213,7 +236,10 @@ class Model( Base ):
             gparams = [ K.clip( gparam, -clip, clip ) for gparam in gparams ]
         
         # gradient based opt
-        updates = optimizer.get_updates( self._params_, gparams )
+        param_updates = optimizer.get_updates( self._params_, gparams )
+        
+        # get all updates
+        updates = param_updates + self._inner_updates_
         
         # compile for callback
         if callbacks is not None:
@@ -230,12 +256,16 @@ class Model( Base ):
         N = len( x[0] )
         batch_num = int( np.ceil( float(N) / batch_size ) )
         n_abs_epoch = n_epochs + self._epoch_
+        
+        # callback
+        print '\n0th epoch:'
+        for callback in callbacks:
+            if ( self._epoch_ % callback.call_freq == 0 ):
+                callback.call()
+        
         while self._epoch_ < n_abs_epoch:
-            # callback
-            for callback in callbacks:
-                if ( self._epoch_ % callback.call_freq == 0 ):
-                    callback.call()
-                    
+            self._epoch_ += 1
+
             # train
             t1 = time.time()
             loss_list = []
@@ -245,194 +275,16 @@ class Model( Base ):
                 in_list = batch_x + batch_y + [1.]
                 loss = f( *in_list )[0]                     # training phase 
                 loss_list.append( loss )
-                if verbose: self._print_progress( self._epoch_, batch_num, i2 )
-            #if verbose: self._print_progress( self._epoch_, batch_num, i2, np.mean(loss_list) )
-                
+                if verbose==1: self._print_progress( self._epoch_, batch_num, i2 )
+                if verbose==2: self._print_progress_loss( self._epoch_, batch_num, i2, loss )
             t2 = time.time()
-            self._tr_time_ += (t2 - t1)
-            self._epoch_ += 1
+            self._tr_time_ += (t2 - t1)            
             print '\n', '    tr_time: ', "%.2f" % (t2-t1), 's'          # print an empty line
-
-    def predict( self, x, batch_size=100 ):
-        # format data
-        x = to_list( x )
-        x = [ K.format_data(e) for e in x ]
-        
-        # compile predict model
-        if not hasattr( self, '_f_predict' ):
-            self._f_predict = K.function_no_given( self._in_nodes_, self._tr_phase_node_, self._out_nodes_ )
-        
-        # do predict
-        # put all data in GPU
-        if batch_size is None:
-            in_list = x + [0.]
-            y_out = self._f_predict( *in_list )
-        # put batch data in GPU
-        else:
-            N = len(x[0])
-            batch_num = int( np.ceil( float(N) / batch_size ) )
-            n_out_nodes = len( self._out_nodes_ )
-            y_out = [ [] for e in self._out_nodes_ ]
-            for i1 in xrange( batch_num ):
-                in_list = [ e[i1*batch_size : min( (i1+1)*batch_size, N ) ] for e in x ] + [0.]
-                batch_y_out = self._f_predict( *in_list )
-                for j1 in xrange(n_out_nodes):
-                    y_out[j1].append( batch_y_out[j1] )
-                    
-            # get y_out
-            y_out = [ np.concatenate(e, axis=0) for e in y_out ]
-        
-        if len(y_out)==1:
-            return y_out[0]
-        else:
-            return y_out
-        
-    
-    @property
-    def info_( self ):
-        dict = { 'epoch': self.epoch_, 
-                 'in_ids': [ layer.id_ for layer in self._in_layers_ ], 
-                 'out_ids': [ layer.id_ for layer in self._out_layers_ ], 
-                 'inter_ids': [layer.id_ for layer in self._any_layers_] }
-        return dict
-    
-    @classmethod
-    def load_from_info( cls, in_layers, out_layers, any_layers, info ):
-        md = cls( in_layers, out_layers, any_layers )
-        md._epoch_ = info['epoch']
-        return md
-
-
-'''
-class Model( Base ):
-    def __init__( self, in_layers, out_layers, any_layers=[] ):
-        super( Model, self ).__init__( in_layers )
-
-        # out layers
-        out_layers = to_list( out_layers )
-        self._out_layers_ = out_layers
-        self._out_nodes_ = [ layer.output_ for layer in self._out_layers_ ]
-        
-        # inter layers
-        any_layers = to_list( any_layers )
-        self._any_layers_ = any_layers
-        self._any_nodes_ = [ layer.output_ for layer in self._any_layers_ ]
-
-
-    def fit( self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], memory_mode=0, verbose=1 ):
-        x = to_list( x )
-        y = to_list( y )
-        
-        # format
-        x = [ K.format_data(e) for e in x ]
-        y = [ K.format_data(e) for e in y ]
-        
-        # shuffle data
-        x, y = shuffle( x, y )
-        
-        # check data
-        self._check_data( y, loss_func )
-        
-        # init gt_nodes
-        gt_nodes = [ K.placeholder( e.ndim ) for e in y ]
-        
-        # memory usage
-        #mem_usage = memory_usage( x, y )
-        #print 'memory usage:', mem_usage / 8e6, 'Mb'
-        
-        # default objective
-        
-
-        if type(loss_func) is str:
-            assert len(self._out_nodes_)==len(gt_nodes), "If you are using default objectives, " \
-                                            + "out_node of out_layers must match ground truth!"
-            loss_node = sum( [ obj.get( loss_func )( pred_node, gt_node ) 
-                            for pred_node, gt_node in zip( self._out_nodes_, gt_nodes ) ] )
-        # user defined objective
-        else:
-            loss_node = loss_func( self._out_nodes_, self._any_nodes_, gt_nodes )
-         
-        # gradient
-        gparams = K.grad( loss_node + self._reg_value_, self._params_ )
-        
-        # todo clip gradient
-        if clip is not None:
-            gparams = [ K.clip( gparam, -clip, clip ) for gparam in gparams ]
-        
-        # gradient based opt
-        updates = optimizer.get_updates( self._params_, gparams )
-        
-        # compile for callback
-        if callbacks is not None:
-            callbacks = to_list( callbacks )
-            for callback in callbacks:
-                callback.compile( self ) 
-
-        from numpy import linalg
-        import theano
-        
-
-        # compile model
-        input_nodes = self._in_nodes_ + gt_nodes
-        output_nodes = [ loss_node ]
-        f = K.function_no_given( input_nodes, self._tr_phase_node_, output_nodes, updates)
-
-        a1_out_node = self.find_layer('a1').output_
-        f_debug = K.function_no_given( self._in_nodes_, self._tr_phase_node_, a1_out_node )
-        
-        g_a1_node = K.grad( loss_node+self._reg_value_, [a1_out_node] )
-        f_debug2 = K.function_no_given( input_nodes, self._tr_phase_node_, g_a1_node )
-        
-        
-        g_a1_H =  K.grad( loss_node+self._reg_value_, [self.find_layer('a1')._H_] )
-        f_debug3 = K.function_no_given( input_nodes, self._tr_phase_node_, g_a1_H )
-
-        
-
-        # train
-        N = len( x[0] )
-        batch_num = int( np.ceil( float(N) / batch_size ) )
-        n_abs_epoch = n_epochs + self._epoch_
-        while self._epoch_ < n_abs_epoch:
+            
             # callback
             for callback in callbacks:
                 if ( self._epoch_ % callback.call_freq == 0 ):
                     callback.call()
-                    
-            # train
-            t1 = time.time()
-            loss_list = []
-            for i2 in xrange(batch_num):
-                batch_x = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in x ]
-                batch_y = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in y ]
-                in_list = batch_x + batch_y + [1.]
-                
-                in_list2 = batch_x + [0.]
-                
-                
-                
-                #np.set_printoptions(threshold=np.nan, linewidth=1000, precision=2, suppress=True)
-                print self._epoch_
-                print 'is_nan_H^11:', np.sum(np.isnan(linalg.matrix_power( self.find_layer('a1').H_, 11 )))
-                print 'is_nan_reluWx:', np.sum(np.isnan(activations.relu( np.dot(batch_x, self.find_layer('a1').W_) )))
-                print np.sum(self.find_layer('a1').W_), np.sum(self.find_layer('a1').H_), np.sum(self.find_layer('a1').b_)
-                print np.sum(self.find_layer('a3').W_), np.sum(self.find_layer('a3').b_)
-                print 'a1_out:', f_debug( *in_list2 )
-                print 'a1_grad_node:', f_debug2( *in_list )
-                print 'a1_grad_H:', f_debug3( *in_list )
-                
-                
-                loss = f( *in_list )[0]  
-                loss_list.append( loss ) 
-                #print self._epoch_, loss
-                print  loss 
-                #if verbose: self._print_progress( self._epoch_, batch_num, i2 )
-            #if verbose: self._print_progress( self._epoch_, batch_num, i2, np.mean(loss_list) )
-                
-            t2 = time.time()
-            self._tr_time_ += (t2 - t1)
-            self._epoch_ += 1
-            print '\n', '    tr_time: ', "%.2f" % (t2-t1), 's'          # print an empty line
 
     def predict( self, x, batch_size=100 ):
         # format data
@@ -482,7 +334,7 @@ class Model( Base ):
         md = cls( in_layers, out_layers, any_layers )
         md._epoch_ = info['epoch']
         return md
-'''
+
         
 class Sequential( Model ):
     def __init__( self ):
