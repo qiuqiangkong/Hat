@@ -6,7 +6,7 @@ Modified: 2016.05.26 Add Convolution1D (TDNN)
           2016.08.03 Add info_(), load_from_info()
 --------------------------------------
 '''
-from core import Layer
+from core import Layer, Lambda
 from ..globals import new_id
 from .. import backend as K
 from .. import initializations
@@ -17,13 +17,11 @@ import numpy as np
 
 
 # Get len_out of feature maps after conv
-def conv_out_len( len_in, len_filter, border_mode ):
-    if border_mode=='same':
-        len_out = len_in
-    elif border_mode=='valid':
-        len_out = len_in - len_filter + 1
+def conv_out_len( len_in, len_filter, border_mode, downsample ):
+    if border_mode=='valid':
+        len_out = (len_in - len_filter + 1) // downsample
     elif border_mode=='full':
-        len_out = len_in + len_filter - 1
+        len_out = (len_in + len_filter - 1) // downsample
     else:
         raise Exception("Do not support border_mode='" + border_mode + "'!")
     return len_out
@@ -146,7 +144,7 @@ class Convolution1D( Layer ):
 2D Convolutional Layer
 '''
 class Convolution2D( Layer ):
-    def __init__( self, n_outfmaps, n_row, n_col, act, init_type='uniform', border_mode='full', 
+    def __init__( self, n_outfmaps, n_row, n_col, act, init_type='glorot_uniform', border_mode='valid', strides=(1,1),
                   W_init=None, b_init=None, W_reg=None, b_reg=None, name=None ):
         super( Convolution2D, self ).__init__( name )
         self._n_outfmaps_ = n_outfmaps
@@ -155,6 +153,7 @@ class Convolution2D( Layer ):
         self._act_ = act
         self._init_type_ = init_type
         self._border_mode_ = border_mode
+        self._strides_ = strides
         self._W_init_ = W_init
         self._b_init_ = b_init
         self._W_reg_ = W_reg
@@ -175,10 +174,10 @@ class Convolution2D( Layer ):
         # init params
         filter_shape = ( self._n_outfmaps_, n_infmaps, self._n_row_, self._n_col_ )
         self._W_ = self._init_params( self._W_init_, self._init_type_, filter_shape, name=str(self._name_)+'_W' )
-        self._b_ = self._init_params( self._b_init_, self._init_type_, self._n_outfmaps_, name=str(self._name_)+'_b' )
+        self._b_ = self._init_params( self._b_init_, 'zeros', self._n_outfmaps_, name=str(self._name_)+'_b' )
 
         # do convolution
-        lin_out = K.conv2d( input, self._W_, border_mode=self._border_mode_ ) + self._b_.dimshuffle('x', 0, 'x', 'x')
+        lin_out = K.conv2d( input, self._W_, border_mode=self._border_mode_, strides=self._strides_ ) + self._b_.dimshuffle('x', 0, 'x', 'x')
         
         # output activation
         output = activations.get( self._act_ )( lin_out )
@@ -186,9 +185,7 @@ class Convolution2D( Layer ):
         # assign attributes
         self._prevs_ = in_layers
         self._nexts_ = []
-        self._out_shape_ = ( None, self._n_outfmaps_, 
-                            conv_out_len(height, self._n_row_, self._border_mode_), 
-                            conv_out_len(width, self._n_col_, self._border_mode_) )
+        self._out_shape_ = self._get_out_shape( height, width, self._n_row_, self._n_col_, self._border_mode_, self._strides_ )
         self._output_ = output
         self._params_ = [ self._W_, self._b_ ]
         self._reg_value_ = self._get_reg()
@@ -254,10 +251,44 @@ class Convolution2D( Layer ):
             
         return reg_value
     
+    # get out shape
+    def _get_out_shape( self, height, width, n_row, n_col, border_mode, strides ):
+        if border_mode=='valid' or border_mode=='full':
+            out_shape = ( None, self._n_outfmaps_, 
+                                conv_out_len(height, n_row, border_mode, strides[0]), 
+                                conv_out_len(width, n_col, border_mode, strides[1]) )
+        elif type(border_mode) is tuple:
+            pad_height = height + border_mode[0] * 2
+            pad_width = width + border_mode[1] * 2
+            out_shape = ( None, self._n_outfmaps_, 
+                                conv_out_len(pad_height, n_row, 'valid', strides[0]), 
+                                conv_out_len(pad_width, n_col, 'valid', strides[1]) )
+        return out_shape
+    
     # ------------------------------------
     
    
+
+def _zero_padding_2d( input, **kwargs ):
+    padding = kwargs['padding']
+    in_shape = input.shape
     
+    # out shape after padding
+    out_shape = list(in_shape)
+    out_shape[-2] = in_shape[-2] + 2*padding[0]
+    out_shape[-1] = in_shape[-1] + 2*padding[1]
     
+    # assign value
+    output = K.zeros(out_shape)
+    slices = [slice(None)] * (input.ndim-2) + [ slice( padding[0], out_shape[-2]-padding[0] ) ] \
+           + [ slice( padding[1], out_shape[-1]-padding[1] ) ]
+    output = K.set_subtensor( output[slices],input )
+    return output
+   
+class ZeroPadding2D( Lambda ):
+    def __init__( self, name=None, **kwargs ):
+        assert 'padding' in kwargs, "You must specifiy 'padding' kwarg in MaxPool2D!"
+        super( ZeroPadding2D, self ).__init__( _zero_padding_2d, name, **kwargs )
+
            
     
