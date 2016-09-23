@@ -48,7 +48,7 @@ def mean_pool( input ):
 seq = Sequential()
 seq.add( InputLayer( max_len ) )
 seq.add( Embedding( n_words, n_proj ) )
-seq.add( LSTM( n_hid, 'tanh', return_sequence=True ) )
+seq.add( LSTM( n_hid, 'tanh', return_sequence=True ) )  # Try RNN, GRU instead
 seq.add( Lambda( mean_pool ) )
 seq.add( Dense( n_out, 'softmax' ) )
 md = seq.combine()
