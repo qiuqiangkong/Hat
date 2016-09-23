@@ -2,7 +2,7 @@
 SUMMARY:  CIFAR-10 classification, using residual 34 layers cnn network. 
           After 10 epoch, tr_err=12%, te_err=23%
           About 4000 s/epoch in 
-Ref:      "Deep Residual learning for Image Recognition"
+Ref:      "Identity mappings in deep residual networks"
 AUTHOR:   Qiuqiang Kong
 Created:  2016.09.21
 Modified: -
