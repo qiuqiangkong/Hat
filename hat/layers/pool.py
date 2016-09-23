@@ -46,6 +46,7 @@ class MaxPool1D( Lambda ):
 Max Pooling 2D
 '''
 # for cnn
+'''
 def _max_pool_2d( input, in_shape, **kwargs ):
     assert len(in_shape)==4, "shape.ndim should be 4, shape:(batch_size, n_infmaps, height, width), yours is " + str(in_shape)
     
@@ -57,6 +58,11 @@ def _max_pool_2d( input, in_shape, **kwargs ):
     output = K.pool2d( input, pool_size, ignore_border=True )
     out_shape = ( None, n_infmaps, int(height/pool_size[0]), int(width/pool_size[1]) )
     return output, out_shape
+'''
+def _max_pool_2d( input, **kwargs ):
+    pool_size = kwargs['pool_size']
+    output = K.pool2d( input, pool_size, ignore_border=True )
+    return output
     
 class MaxPool2D( Lambda ):
     def __init__( self, name=None, **kwargs ):
