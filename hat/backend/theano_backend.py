@@ -16,12 +16,14 @@ _FLOATX = theano.config.floatX
 
 # Create a node of the graph. shape should be tuple
 def placeholder( n_dim=None, name=None ):
-    #return T.TensorType( dtype=_FLOATX, broadcastable=[False]*n_dim, name=name )()
+    return T.TensorType( dtype=_FLOATX, broadcastable=[False]*n_dim, name=name )(name)
+    '''
     if n_dim==0: return T.scalar( name=name, dtype=_FLOATX )
     if n_dim==1: return T.vector( name=name, dtype=_FLOATX )
     if n_dim==2: return T.matrix( name=name, dtype=_FLOATX )
     if n_dim==3: return T.tensor3( name=name, dtype=_FLOATX )
     if n_dim==4: return T.tensor4( name=name, dtype=_FLOATX )
+    '''
     
 # shared tensor from numpy array
 def shared( value, name=None, dtype=_FLOATX ):
@@ -38,6 +40,10 @@ def get_value( x ):
     
 def cast( x, type ):
     return T.cast( x, type )
+
+# assign value
+def set_subtensor( x, y, inplace=False, tolerate_inplace_aliasing=False ):
+    return T.set_subtensor( x, y, inplace, tolerate_inplace_aliasing )
     
 ### basic operation
    
@@ -58,6 +64,9 @@ def exp( x ):
 
 def mean( x, axis=None ):
     return T.mean( x, axis )
+    
+def var( x, axis=None ):
+    return T.var( x, axis )
     
 def std( x, axis=None ):
     return T.std( x, axis )
@@ -80,9 +89,8 @@ def power( x, a ):
 def prod( x ):
     return T.prod( x )
 
-def conv2d( input, filters, border_mode ):
-    if border_mode=='same': border_mode='half'
-    return T.nnet.conv2d( input, filters, border_mode=border_mode )
+def conv2d( input, filters, border_mode, strides ):
+    return T.nnet.conv2d( input, filters, border_mode=border_mode, subsample=strides )
     
 def pool2d( input, ds, ignore_border=True, st=None, padding=(0, 0), mode='max' ):
     if mode=='avg': mode='average_exc_pad'
@@ -126,6 +134,20 @@ def ifelse( condition, op1, op2 ):
     
 def swapaxes( x, axis1, axis2 ):
     return T.swapaxes( x, axis1, axis2 )
+    
+# broadcast
+# e.g. broadcast( x, x_ndim=1, bd_axes=(0,2,3) )
+#      then return tensor dimshuffle according to ('x',0,'x','x')
+def broadcast( x, x_ndim, bc_axes  ):
+    bc_ndim = x_ndim + len(bc_axes)
+    shuffle_str = ['x',] * bc_ndim
+    cnt = 0
+    for i1 in xrange( bc_ndim ):
+        if i1 not in bc_axes:
+            shuffle_str[i1] = cnt
+            cnt += 1
+            
+    return x.dimshuffle( shuffle_str )
     
 ### random number
 def rng_normal( size, avg, std ):
