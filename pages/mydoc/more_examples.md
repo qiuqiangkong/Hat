@@ -27,8 +27,18 @@ Here are more examples in image, natural language processing (NLP) and audio pro
     <td><a href="https://github.com/qiuqiangkong/Hat/blob/master/examples/cifar10/main_cnn9.py">CNN (9 layers VGG)</a>
         <a href="https://github.com/qiuqiangkong/Hat/blob/master/examples/cifar10/main_cnn34.py">CNN (34 layers)</a>
         <a href="https://github.com/qiuqiangkong/Hat/blob/master/examples/cifar10/main_resnet34.py">Resnet (34 layers)</a>
-		<a href="https://github.com/qiuqiangkong/Hat/blob/master/examples/cifar10/main_preact_resnet152.py">Resnet (152 layers)</a>
+		<a href="https://github.com/qiuqiangkong/Hat/blob/master/examples/cifar10/main_preact_resnet152.py">Preact resnet (152 layers)</a>
 	</td> 
-    <td>Image</td>
+	<td>Image</td>
+  </tr>
+  <tr>
+	<td>IMDB</td>
+	<td><a href="https://github.com/qiuqiangkong/Hat/blob/master/examples/imdb_lstm/main_lstm.py">LSTM, RNN, GRU</a></td>
+	<td>NLP</td>
+  </tr>
+  <tr>
+    <td>music source separation</td>
+	<td><a href="https://github.com/qiuqiangkong/Hat/tree/master/examples/music_source_separation">DNN, RNN</a></td>
+	<td>Audio</td>
   </tr>
 </table>
