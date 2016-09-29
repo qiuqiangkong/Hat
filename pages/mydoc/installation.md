@@ -42,6 +42,7 @@ sys.path.append('xxx/Hat')
 
 ## Write your first NN
 Once you have installed Hat, you can use the following code to build your first NN. 
+
 ```
 from hat.layers.core import InputLayer, Dense, Dropout
 from hat.models import Sequential
