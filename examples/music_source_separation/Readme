@@ -1,0 +1,7 @@
+Example of Source Separation
+2016.09.28
+===================
+
+run prepare_data.py			# extract features
+run main_dnn.py or main_rnn.py		# train model
+run main_recover.py			# do source separation and evaluate and write out wav
