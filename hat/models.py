@@ -75,6 +75,10 @@ class Base( object ):
     def any_nodes_( self ):
         return self._any_nodes_
     
+    # gt nodes will be generated using fit()
+    @property
+    def gt_nodes_( self ):
+        return self._gt_nodes_
     
     @property
     def epoch_( self ):
@@ -212,7 +216,7 @@ class Model( Base ):
         self._check_data( y, loss_func )
         
         # init gt_nodes
-        gt_nodes = [ K.placeholder( e.ndim ) for e in y ]
+        self._gt_nodes_ = [ K.placeholder( e.ndim ) for e in y ]
         
         # memory usage
         print "Train", 
@@ -220,13 +224,14 @@ class Model( Base ):
         
         # default objective
         if type(loss_func) is str:
-            assert len(self._out_nodes_)==len(gt_nodes), "If you are using default objectives, " \
+            assert len(self._out_nodes_)==len(self._gt_nodes_), "If you are using default objectives, " \
                                             + "out_node of out_layers must match ground truth!"
             loss_node = sum( [ obj.get( loss_func )( pred_node, gt_node ) 
-                            for pred_node, gt_node in zip( self._out_nodes_, gt_nodes ) ] )
+                            for pred_node, gt_node in zip( self._out_nodes_, self._gt_nodes_ ) ] )
         # user defined objective
         else:
-            loss_node = loss_func( self._out_nodes_, self._any_nodes_, gt_nodes )
+            #loss_node = loss_func( self._out_nodes_, self._any_nodes_, gt_nodes )
+            loss_node = loss_func( self )
          
         # gradient
         gparams = K.grad( loss_node + self._reg_value_, self._params_ )
@@ -248,7 +253,7 @@ class Model( Base ):
                 callback.compile( self ) 
 
         # compile model
-        input_nodes = self._in_nodes_ + gt_nodes
+        input_nodes = self._in_nodes_ + self._gt_nodes_
         output_nodes = [ loss_node ]
         f = K.function_no_given( input_nodes, self._tr_phase_node_, output_nodes, updates )
 
@@ -279,7 +284,7 @@ class Model( Base ):
                 if verbose==2: self._print_progress_loss( self._epoch_, batch_num, i2, loss )
             t2 = time.time()
             self._tr_time_ += (t2 - t1)            
-            print '\n', '    tr_time: ', "%.2f" % (t2-t1), 's'          # print an empty line
+            if verbose!=0: print '\n', '    tr_time: ', "%.2f" % (t2-t1), 's'          # print an empty line
             
             # callback
             for callback in callbacks:
