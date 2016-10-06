@@ -59,6 +59,17 @@ def pad_trunc_seq( x, max_len, pad_type='post' ):
         if pad_type=='pre': return x[L-max_len:]
         if pad_type=='post': return x[0:max_len]
 
+# enframe sequence to matrix
+def enframe( x, win, inc ):
+    Xlist = []
+    p = 0
+    while ( p+win <= len(x) ):
+        Xlist.append( x[p:p+win] )
+        p += inc
+    
+    X = np.array( Xlist )
+    return X
+
 # concatenate feautres     
 def mat_2d_to_3d( X, agg_num, hop ):
     # pad to at least one block
