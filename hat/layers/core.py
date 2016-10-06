@@ -258,7 +258,7 @@ Dense Layer
 '''
 class Dense( Layer ):
     def __init__( self, n_out, act, init_type='glorot_uniform', 
-                  W_init=None, b_init=None, W_reg=None, b_reg=None, trainable=True, name=None ):
+                  W_init=None, b_init=None, W_reg=None, b_reg=None, trainable_params=['W','b'], name=None ):
                       
         super( Dense, self ).__init__( name )
         self._n_out_ = n_out
@@ -268,14 +268,14 @@ class Dense( Layer ):
         self._b_init_ = b_init
         self._W_reg_ = W_reg
         self._b_reg_ = b_reg
-        self._trainable_ = trainable
+        self._trainable_params_ = trainable_params
         
     def __call__( self, in_layers ):
         # merge
         in_layers = to_list( in_layers )
         input = K.concatenate( [ layer.output_ for layer in in_layers ], axis=-1 )
         n_in = sum( [ layer.out_shape_[-1] for layer in in_layers ] )
-        
+
         # init W
         self._W_ = self._init_params( self._W_init_, self._init_type_, shape=(n_in, self._n_out_), name=str(self._name_)+'_W' )
 
@@ -294,7 +294,8 @@ class Dense( Layer ):
         self._nexts_ = []
         self._out_shape_ = in_layers[0].out_shape_[0:-1] + (self._n_out_,)
         self._output_ = output
-        self.set_trainable( self._trainable_ )
+        self._set_trainable_params()
+        self._reg_value_ = self._get_reg()
         
         # below are compulsory parts
         [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
@@ -327,17 +328,14 @@ class Dense( Layer ):
         return dict
         
     # ---------- Public methods ----------
-    
-    # set trainable True or False
-    def set_trainable( self, val ):
-        self._trainable_ = val
-        
-        if self._trainable_ is True:
-            self._params_ = [ self._W_, self._b_ ]
-            self._reg_value_ = self._get_reg()
-        else:
-            self._params_ = []
-            self._reg_value_ = 0.
+            
+    # set trainable params
+    def _set_trainable_params( self ):
+        legal_params = [ 'W', 'b' ]
+        self._params_ = []
+        for ch in self._trainable_params_:
+            assert ch in legal_params, "'ch' is not a param of " + self.__class__.__name__ + "! "
+            self._params_.append( self.__dict__[ '_'+ch+'_' ] )
     
     # load layer from info
     @classmethod
