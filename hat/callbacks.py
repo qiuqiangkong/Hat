@@ -134,20 +134,21 @@ class Validation( Callback ):
     def _evaluate( self, x, y, eval_type ):
         
         # init gt_nodes
-        gt_nodes = [ K.placeholder( e.ndim ) for e in y ]
+        #gt_nodes = [ K.placeholder( e.ndim ) for e in y ]
         
         # get metric losses node
         loss_nodes = []
         for metric in self._metrics_:
             # if use default objective
             if type(metric) is str:
-                assert len(self._md_.out_nodes_)==len(gt_nodes), "If you are using default objectives, " \
+                assert len(self._md_.out_nodes_)==len(self._md_.gt_nodes_), "If you are using default objectives, " \
                                                 + "out_node of out_layers must match ground truth!"
                 loss_node = sum( [ obj.get( metric )( pred_node, gt_node ) 
-                                for pred_node, gt_node in zip( self._md_.out_nodes_, gt_nodes ) ] )
+                                for pred_node, gt_node in zip( self._md_.out_nodes_, self._md_.gt_nodes_ ) ] )
             # if user define their objective function
             elif isfunction( metric ):
-                loss_node = metric( self._md_.out_nodes_, self._md_.any_nodes_, gt_nodes )
+                #loss_node = metric( self._md_.out_nodes_, self._md_.any_nodes_, gt_nodes )
+                loss_node = metric( self._md_ )
             # if node
             else:
                 loss_node = metric
@@ -157,7 +158,8 @@ class Validation( Callback ):
         # compile evaluation function
         if not hasattr( self, '_f_evaluate' ):
             print 'compiling evaluation function ..'
-            input_nodes = self._md_.in_nodes_ + gt_nodes
+            #input_nodes = self._md_.in_nodes_ + gt_nodes
+            input_nodes = self._md_.in_nodes_ + self._md_.gt_nodes_
             self._f_evaluate = K.function_no_given( input_nodes, self._md_.tr_phase_node_, loss_nodes )
             print 'compile finished. '
         
