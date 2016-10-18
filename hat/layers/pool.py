@@ -12,58 +12,48 @@ from .. import initializations
 from .. import activations
 from ..supports import to_list, to_tuple, get_mask
 import numpy as np
-# from theano.tensor.signal.downsample import max_pool_2d
 
-
-# todo
-def _max_pool_1d( input, in_shape, **kwargs ):
-    assert len(in_shape)==3, "shape.ndim should be 3, shape:(batch_size, n_time, n_in), yours is " + str(in_shape)
     
-    # init kwargs
-    [batch_size, n_time, n_in] = in_shape
-    len_pool = kwargs['len_pool']
+'''
+Max Pooling 1D, usually applied after Convolution1D
+'''
+def _max_pool_1d( input, **kwargs ):
+    pool_size = kwargs['pool_size']
+    assert type(pool_size) is int, "pool_size must be int in Convolution1D!"
+    output = K.pool2d( input, (pool_size,1), ignore_border=True )
+    return output
     
-    # downsample
-    pool_size = (len_pool, 1)
-    
-    # size(output): (batch_size, n_outfmaps, n_time, 1)
-    output = downsample.max_pool_2d( input.dimshuffle(0,2,1,'x'), pool_size, ignore_border=True )
-    
-    # size(output): (batch_size, n_time, n_outfmaps)
-    output = output.dimshuffle(0,2,1,3).flatten(3)
-    out_shape = ( None, n_time//len_pool, n_in )
-    
-    return output, out_shape
-    
+# pool_size: #a1
 class MaxPool1D( Lambda ):
     def __init__( self, name=None, **kwargs ):
-        assert 'len_pool' in kwargs, "You must specifiy len_pool kwarg in MaxPool1D!"
+        assert 'pool_size' in kwargs, "You must specifiy pool_size kwarg in MaxPool1D!"
         super( MaxPool1D, self ).__init__( _max_pool_1d, name, **kwargs )
 
+    # model's info & params
+    @property
+    def info_( self ):
+        dict = { 'class_name': self.__class__.__name__, 
+                 'id': self._id_, 
+                 'kwargs': self._kwargs_, 
+                 'name': self._name_, }
+        return dict
+        
+    # load layer from info
+    @classmethod
+    def load_from_info( cls, info ):
+        layer = cls( info['name'], **info['kwargs'] )
+        return layer
 
 
 '''
-Max Pooling 2D
-'''
-# for cnn
-'''
-def _max_pool_2d( input, in_shape, **kwargs ):
-    assert len(in_shape)==4, "shape.ndim should be 4, shape:(batch_size, n_infmaps, height, width), yours is " + str(in_shape)
-    
-    # init kwargs
-    [batch_size, n_infmaps, height, width] = in_shape
-    pool_size = kwargs['pool_size']
-    
-    # downsample
-    output = K.pool2d( input, pool_size, ignore_border=True )
-    out_shape = ( None, n_infmaps, int(height/pool_size[0]), int(width/pool_size[1]) )
-    return output, out_shape
+Max Pooling 2D, usually applied after Convolution2D
 '''
 def _max_pool_2d( input, **kwargs ):
     pool_size = kwargs['pool_size']
     output = K.pool2d( input, pool_size, ignore_border=True )
     return output
     
+# pool_size: (a1,a2)
 class MaxPool2D( Lambda ):
     def __init__( self, name=None, **kwargs ):
         assert 'pool_size' in kwargs, "You must specifiy pool_size kwarg in MaxPool2D!"
