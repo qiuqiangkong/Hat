@@ -155,7 +155,7 @@ class Convolution1D( Layer ):
             out_shape = ( None, self._n_outfmaps_, 
                                 conv_out_len(n_time, len_filter, border_mode, stride) )
         elif type(border_mode) is tuple:
-            pad_n_time = height + border_mode[0] * 2
+            pad_n_time = n_time + border_mode[0] * 2
             out_shape = ( None, self._n_outfmaps_, 
                                 conv_out_len(pad_n_time, len_filter, 'valid', stride) )
         return out_shape
