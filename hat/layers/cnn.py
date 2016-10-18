@@ -28,16 +28,19 @@ def conv_out_len( len_in, len_filter, border_mode, downsample ):
 
 '''
 [1] Waibel, Alexander, et al. "Phoneme recognition using time-delay neural networks." (1989)
+input shape should be (n_samples, n_fmaps, n_time)
+border_mode: 'valid' | 'full' | #a1 (pad with this #a1 then do valid conv)
 '''
 class Convolution1D( Layer ):
-    def __init__( self, n_outfmaps, len_filter, act, init_type='uniform', 
+    def __init__( self, n_outfmaps, len_filter, act, init_type='glorot_uniform', border_mode='valid', stride=1,
                   W_init=None, b_init=None, W_reg=None, b_reg=None, name=None ):
         super( Convolution1D, self ).__init__( name )
         self._n_outfmaps_ = n_outfmaps
         self._len_filter_ = len_filter
         self._act_ = act
         self._init_type_ = init_type
-        self._border_mode_ = 'valid'    # should be fixed to 'valid'
+        self._border_mode_ = border_mode    # should be fixed to 'valid'
+        self._stride_ = stride
         self._W_init_ = W_init
         self._b_init_ = b_init
         self._W_reg_ = W_reg
@@ -53,15 +56,16 @@ class Convolution1D( Layer ):
         # input dim must be 3
         input = in_layer.output_
         assert len(in_shape)==3, "Input shape should be (batch_size, n_time, n_in), yours is " + str(in_shape)
-        [batch_size, n_time, n_in] = in_shape
+        [batch_size, n_infmaps, n_time] = in_shape
         
         # do convolution
-        filter_shape = ( self._n_outfmaps_, 1, self._len_filter_, n_in )
+        filter_shape = ( self._n_outfmaps_, n_infmaps, self._len_filter_, 1 )
         self._W_ = self._init_params( self._W_init_, self._init_type_, filter_shape, name=str(self._name_)+'_W' )
-        self._b_ = self._init_params( self._b_init_, self._init_type_, self._n_outfmaps_, name=str(self._name_)+'_b' )
+        self._b_ = self._init_params( self._b_init_, 'zeros', self._n_outfmaps_, name=str(self._name_)+'_b' )
         
         # shape(lin_out): (batch_size, n_outfmaps, n_time, 1)
-        lin_out = K.conv2d( input.dimshuffle(0,'x',1,2), self._W_, self._border_mode_ ) + self._b_.dimshuffle('x', 0, 'x', 'x')
+        border_mode = self._get_border_mode( self._border_mode_ )
+        lin_out = K.conv2d( input.dimshuffle(0,1,2,'x'), self._W_, border_mode, strides=(self._stride_,1) ) + self._b_.dimshuffle('x', 0, 'x', 'x')
         
         # shape(lin_out): (batch_size, n_outfmaps, n_time)
         lin_out = lin_out.dimshuffle(0,1,2,3).flatten(3)
@@ -72,7 +76,7 @@ class Convolution1D( Layer ):
         # assign attributes
         self._prevs_ = in_layers
         self._nexts_ = []
-        self._out_shape_ = ( None, self._n_outfmaps_, conv_out_len(n_time, self._len_filter_, self._border_mode_ ) )
+        self._out_shape_ = self._get_out_shape( n_time, self._len_filter_, border_mode, self._stride_ )
         self._output_ = output
         self._params_ = [ self._W_, self._b_ ]
         self._reg_value_ = self._get_reg()
@@ -102,6 +106,8 @@ class Convolution1D( Layer ):
                  'len_filter': self._len_filter_, 
                  'act': self._act_, 
                  'init_type': self._init_type_,
+                 'border_mode': self._border_mode_, 
+                 'stride': self._stride_, 
                  'W': self.W_, 
                  'b': self.b_, 
                  'W_reg_info': regularizations.get_info( self._W_reg_ ),
@@ -136,12 +142,32 @@ class Convolution1D( Layer ):
             
         return reg_value
     
+    # get border_mode
+    def _get_border_mode( self, border_mode ):
+        if type(self._border_mode_) is int: 
+            return (self._border_mode_,1)
+        else:
+            return self._border_mode_
+    
+    # get out shape
+    def _get_out_shape( self, n_time, len_filter, border_mode, stride ):
+        if border_mode=='valid' or border_mode=='full':
+            out_shape = ( None, self._n_outfmaps_, 
+                                conv_out_len(n_time, len_filter, border_mode, stride) )
+        elif type(border_mode) is tuple:
+            pad_n_time = height + border_mode[0] * 2
+            out_shape = ( None, self._n_outfmaps_, 
+                                conv_out_len(pad_n_time, len_filter, 'valid', stride) )
+        return out_shape
+    
     # ------------------------------------
 
 
 
 '''
 2D Convolutional Layer
+input shape should be (n_samples, n_fmaps, height, width)
+border_mode: 'valid' | 'full' | (a1, a2) (pad with this tuple then do valid conv)
 '''
 class Convolution2D( Layer ):
     def __init__( self, n_outfmaps, n_row, n_col, act, init_type='glorot_uniform', border_mode='valid', strides=(1,1),
@@ -287,7 +313,7 @@ def _zero_padding_2d( input, **kwargs ):
    
 class ZeroPadding2D( Lambda ):
     def __init__( self, name=None, **kwargs ):
-        assert 'padding' in kwargs, "You must specifiy 'padding' kwarg in MaxPool2D!"
+        assert 'padding' in kwargs, "You must specifiy 'padding' kwarg in ZeroPadding2D!"
         super( ZeroPadding2D, self ).__init__( _zero_padding_2d, name, **kwargs )
 
            
