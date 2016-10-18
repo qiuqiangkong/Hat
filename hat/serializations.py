@@ -11,6 +11,7 @@ from layers.core import *
 from layers.cnn import *
 from layers.pool import *
 from layers.rnn import *
+from layers.normalization import *
 from models import *
 
 ### get data segment of model
