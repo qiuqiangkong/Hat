@@ -22,6 +22,11 @@ def categorical_error( p_y_pred, y_gt ):
     err = np.sum( np.not_equal( sp_y_pred, sp_y_gt ) ) / float(N)
     return err
     
+def binary_error( p_y_pred, y_gt, thres ):
+    assert p_y_pred.shape==y_gt.shape, "shape of y_out " + str(p_y_pred.shape) + " and y_gt " + str(y_gt.shape) + " (ground truth) are not equal!"
+    tp, tn, fp, fn = tp_tn_fp_fn( p_y_pred, y_gt, thres )
+    return float(fp+fn) / (tp+tn+fp+fn)
+    
 '''
 categorical crossentropy
 size(p_y_pred): N*n_out

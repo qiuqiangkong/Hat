@@ -16,12 +16,13 @@ import numpy as np
     
 '''
 Max Pooling 1D, usually applied after Convolution1D
+input shape: (N, n_fmaps, n_time)
 '''
 def _max_pool_1d( input, **kwargs ):
     pool_size = kwargs['pool_size']
     assert type(pool_size) is int, "pool_size must be int in Convolution1D!"
-    output = K.pool2d( input, (pool_size,1), ignore_border=True )
-    return output
+    out4d = K.pool2d( input.dimshuffle(0,1,2,'x'), (pool_size,1), ignore_border=True )
+    return out4d.flatten(3)
     
 # pool_size: #a1
 class MaxPool1D( Lambda ):
@@ -47,6 +48,7 @@ class MaxPool1D( Lambda ):
 
 '''
 Max Pooling 2D, usually applied after Convolution2D
+input shape: (N, n_fmaps, n_row, n_col)
 '''
 def _max_pool_2d( input, **kwargs ):
     pool_size = kwargs['pool_size']

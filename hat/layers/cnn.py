@@ -68,7 +68,7 @@ class Convolution1D( Layer ):
         lin_out = K.conv2d( input.dimshuffle(0,1,2,'x'), self._W_, border_mode, strides=(self._stride_,1) ) + self._b_.dimshuffle('x', 0, 'x', 'x')
         
         # shape(lin_out): (batch_size, n_outfmaps, n_time)
-        lin_out = lin_out.dimshuffle(0,1,2,3).flatten(3)
+        lin_out = lin_out.flatten(3)
         
         # activation function
         output = activations.get( self._act_ )( lin_out )
@@ -145,7 +145,7 @@ class Convolution1D( Layer ):
     # get border_mode
     def _get_border_mode( self, border_mode ):
         if type(self._border_mode_) is int: 
-            return (self._border_mode_,1)
+            return (self._border_mode_,0)
         else:
             return self._border_mode_
     
