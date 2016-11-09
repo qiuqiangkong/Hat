@@ -18,17 +18,25 @@ import config as cfg
 
 # loss function
 def loss_func( md ):
-    [in0, b1, c1] = md.any_nodes_
-    [gt_b, gt_c] = md.gt_nodes_
-    return obj.norm_lp( in0[:,-1,:]*b1, gt_b, 2 ) + obj.norm_lp( in0[:,-1,:]*c1, gt_c, 2 )
+    in0 = md.any_nodes_[0]      # shape: (N, n_time, n_freq)
+    mask_b = md.any_nodes_[1]   # shape: (N, n_freq)
+    mask_c = md.any_nodes_[2]   # shape: (N, n_freq)
+    gt_b = md.gt_nodes_[0]      # shape: (N, n_freq)
+    gt_c = md.gt_nodes_[1]      # shape: (N, n_freq)
+    return obj.norm_lp( in0[:,-1,:]*mask_b, gt_b, 2 ) + obj.norm_lp( in0[:,-1,:]*mask_c, gt_c, 2 )
+
 
 # multipl input spectrogram with mask
 def mul( inputs ):
-    return inputs[0] * inputs[1][:,-1,:]
+    mask = inputs[0]            # shape: (N, n_freq)
+    in0 = inputs[1]             # shape: (N, n_time, n_freq)
+    out = mask * in0[:,-1,:]    # shape: (N, n_freq)
+    return out
+
 
 n_freq = 513
 n_time = 3
-hop = 1     # hop must be 1
+hop = 1     # hop must be 1 to recover wav
 n_hid = 500
 
 
@@ -47,10 +55,10 @@ def train():
     lay_a4 = Dropout( 0.2, name='a4' )( lay_a3 )
     lay_a5 = Dense( n_hid, act='relu', name='a5' )( lay_a4 )
     lay_a6 = Dropout( 0.2, name='a6' )( lay_a5 )
-    lay_b1 = Dense( n_freq, act='sigmoid', name='a7' )( lay_a6 )     # mask_left
-    lay_c1 = Dense( n_freq, act='sigmoid', name='a8' )( lay_a6 )     # mask_right
-    lay_out_b = Lambda( mul, name='out_b' )( [lay_b1, lay_in0] )
-    lay_out_c = Lambda( mul, name='out_c' )( [lay_c1, lay_in0] )
+    lay_b1 = Dense( n_freq, act='sigmoid', name='a7' )( lay_a6 )     # mask_left, shape: (N, n_freq)
+    lay_c1 = Dense( n_freq, act='sigmoid', name='a8' )( lay_a6 )     # mask_right, shape: (N, n_freq)
+    lay_out_b = Lambda( mul, name='out_b' )( [lay_b1, lay_in0] )     # out_left, shape: (N, n_freq)
+    lay_out_c = Lambda( mul, name='out_c' )( [lay_c1, lay_in0] )     # out_right, shape: (N, n_freq)
     
     md = Model( in_layers=[lay_in0], out_layers=[lay_out_b, lay_out_c], any_layers=[lay_in0, lay_b1, lay_c1] )
     md.summary()
@@ -75,3 +83,4 @@ def train():
 
 if __name__ == '__main__':
     train()
+    
