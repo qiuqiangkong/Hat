@@ -5,8 +5,6 @@ Created:  2016.09.28
 Modified: -
 --------------------------------------
 '''
-import sys
-sys.path.append('/user/HS229/qk00006/my_code2015.5-/python/Hat')
 from hat import serializations
 import numpy as np
 import os

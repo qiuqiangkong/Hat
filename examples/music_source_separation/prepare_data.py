@@ -5,8 +5,6 @@ Created:  2016.09.23 This file is modified from mir-1k_source_separation
 Modified: -
 --------------------------------------
 '''
-import sys
-sys.path.append('/user/HS229/qk00006/my_code2015.5-/python/Hat')
 import numpy as np
 import os
 from scipy import signal
@@ -110,12 +108,12 @@ def LoadData( fe_fd, agg_num, hop, na_list ):
             y3d = mat_2d_to_3d( X_pad, agg_num, hop )
             y3d_chn1_list.append( y3d )
         
-    X2d = np.concatenate( X2d_list, axis=0 )                # shape: (n_blocks, n_freq)
-    X3d = np.concatenate( X3d_list, axis=0 )                # shape: (n_blocks, agg_num, n_freq)
-    y2d_chn0 = np.concatenate( y2d_chn0_list, axis=0 )      # shape: (n_blocks, n_freq)
-    y2d_chn1 = np.concatenate( y2d_chn1_list, axis=0 )      # shape: (n_blocks, n_freq)
-    y3d_chn0 = np.concatenate( y3d_chn0_list, axis=0 )      # shape: (n_blocks, agg_num, n_freq)
-    y3d_chn1 = np.concatenate( y3d_chn1_list, axis=0 )      # shape: (n_blocks, agg_num, n_freq)
+    X2d = np.concatenate( X2d_list, axis=0 )                # shape: (n_songs*n_chunks, n_freq)
+    X3d = np.concatenate( X3d_list, axis=0 )                # shape: (n_songs*n_chunks, n_time, n_freq)
+    y2d_chn0 = np.concatenate( y2d_chn0_list, axis=0 )      # shape: (n_songs*n_chunks, n_freq)
+    y2d_chn1 = np.concatenate( y2d_chn1_list, axis=0 )      # shape: (n_songs*n_chunks, n_freq)
+    y3d_chn0 = np.concatenate( y3d_chn0_list, axis=0 )      # shape: (n_songs*n_chunks, n_time, n_freq)
+    y3d_chn1 = np.concatenate( y3d_chn1_list, axis=0 )      # shape: (n_songs*n_chunks, n_time, n_freq)
     
     return X2d, X3d, y2d_chn0, y2d_chn1, y3d_chn0, y3d_chn1
 

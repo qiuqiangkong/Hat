@@ -2,11 +2,9 @@
 SUMMARY:  source separation using dnn example
 AUTHOR:   Qiuqiang Kong
 Created:  2016.09.28
-Modified: -
+Modified: 2016.11.09 update
 --------------------------------------
 '''
-import sys
-sys.path.append('/user/HS229/qk00006/my_code2015.5-/python/Hat')
 from hat.models import Model
 from hat.layers.core import InputLayer, Dense, Dropout, Flatten, Lambda
 from hat.layers.rnn import SimpleRnn, LSTM, GRU
@@ -19,17 +17,17 @@ import prepare_data as pp_data
 import config as cfg
 
 # loss function
-def loss_func( out_nodes, any_nodes, gt_nodes ):
-    [in0, b1, c1] = any_nodes
-    [gt_b, gt_c] = gt_nodes
-    return obj.norm_lp( in0*b1, gt_b, 2 ) + obj.norm_lp( in0*c1, gt_c, 2 )
+def loss_func( md ):
+    [in0, b1, c1] = md.any_nodes_
+    [gt_b, gt_c] = md.gt_nodes_
+    return obj.norm_lp( in0[:,-1,:]*b1, gt_b, 2 ) + obj.norm_lp( in0[:,-1,:]*c1, gt_c, 2 )
 
 # multipl input spectrogram with mask
 def mul( inputs ):
     return inputs[0] * inputs[1][:,-1,:]
 
 n_freq = 513
-agg_num = 3
+n_time = 3
 hop = 1     # hop must be 1
 n_hid = 500
 
@@ -38,10 +36,10 @@ n_hid = 500
 def train():
     
     # load data
-    tr_X2d_mix, tr_X3d_mix, tr_y2d_chn0, tr_y2d_chn1, tr_y3d_chn0, tr_y3d_chn1 = pp_data.LoadData( cfg.fe_fft_fd, agg_num, hop, na_list=cfg.tr_list )
+    tr_X2d_mix, tr_X3d_mix, tr_y2d_chn0, tr_y2d_chn1, tr_y3d_chn0, tr_y3d_chn1 = pp_data.LoadData( cfg.fe_fft_fd, n_time, hop, na_list=cfg.tr_list )
     
     # build model
-    lay_in0 = InputLayer( in_shape=( (agg_num, n_freq) ), name='in1' )
+    lay_in0 = InputLayer( in_shape=( (n_time, n_freq) ), name='in1' )
     lay_a0 = Flatten()( lay_in0 )
     lay_a1 = Dense( n_hid, act='relu', name='a1' )( lay_a0 )
     lay_a2 = Dropout( 0.2, name='a2' )( lay_a1 )
@@ -59,7 +57,7 @@ def train():
     
     
     # validation
-    validation = Validation( tr_x=[np.abs(tr_y3d_chn0)+np.abs(tr_y3d_chn1)], tr_y=[np.abs(tr_y2d_chn0), np.abs(tr_y2d_chn1)], batch_size=100, metrics=['mse'], call_freq=1, dump_path='validation.p' )
+    validation = Validation( tr_x=[np.abs(tr_y3d_chn0)+np.abs(tr_y3d_chn1)], tr_y=[np.abs(tr_y2d_chn0), np.abs(tr_y2d_chn1)], batch_size=100, metrics=[loss_func], call_freq=1, dump_path=None )
     
     # save model
     if not os.path.exists(cfg.md_fd): os.makedirs(cfg.md_fd)

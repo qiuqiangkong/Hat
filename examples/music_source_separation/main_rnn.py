@@ -5,8 +5,6 @@ Created:  2016.09.28
 Modified: -
 --------------------------------------
 '''
-import sys
-sys.path.append('/user/HS229/qk00006/my_code2015.5-/python/Hat')
 from hat.models import Model
 from hat.layers.core import InputLayer, Dense, Dropout, Flatten, Lambda
 from hat.layers.rnn import SimpleRnn, LSTM, GRU
