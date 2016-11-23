@@ -33,16 +33,13 @@ class Base( object ):
         # find all nodes using BFT
         self._id_list_, self._layer_list_ = BFT( self._in_layers_ )
         
-        # get params by traveling all layers
-        self._params_ = []
-        for layer in self._layer_list_:
-            self._params_ += layer.params_
-        
         # get inner updates by traveling all layers
         self._inner_updates_ = []
         for layer in self._layer_list_:
             if hasattr( layer, 'inner_updates_' ):
                 self._inner_updates_ += layer.inner_updates_
+                
+        self._gt_nodes_ = None      # will be set in fit()
             
         # sum regs by traveling all layers
         self._reg_value_ = 0.
@@ -55,6 +52,7 @@ class Base( object ):
         # time
         self._tr_time_ = 0.
         self._epoch_ = 0
+        self._iter_ = 0
     
     
         
@@ -75,7 +73,7 @@ class Base( object ):
     def any_nodes_( self ):
         return self._any_nodes_
     
-    # gt nodes will be generated using fit()
+    # gt nodes will be set using fit()
     @property
     def gt_nodes_( self ):
         return self._gt_nodes_
@@ -83,6 +81,10 @@ class Base( object ):
     @property
     def epoch_( self ):
         return self._epoch_
+        
+    @property
+    def iter_( self ):
+        return self._iter_
         
     @property
     def tr_time_( self ):
@@ -97,6 +99,12 @@ class Base( object ):
         return self._reg_value_
         
     # ---------- Public methods ----------
+    
+    # set gt_nodes
+    def set_gt_nodes( self, y ):
+        y = to_list( y )
+        y = [ K.format_data(e) for e in y ]
+        self._gt_nodes_ = [ K.placeholder( e.ndim ) for e in y ]
     
     def summary( self ):
         print '---------- summary -----------'
@@ -146,6 +154,21 @@ class Base( object ):
 
     # ---------- Private methods ----------
 
+    # set epoch
+    def _set_epoch( self, val ):
+        self._epoch_ = val
+        
+    # set iter
+    def _set_iter( self, val ):
+        self._iter_ = val
+    
+    # get params by traveling all layers
+    def _get_all_params( self ):
+        params = []
+        for layer in self._layer_list_:
+            params += layer.params_
+        return params
+
     # get number of params in a layer
     def _num_of_params( self, layer ):
         n_params = 0
@@ -174,6 +197,11 @@ class Base( object ):
         sys.stdout.write("%d-th epoch %d%%   %s %f \r" % ( epoch, float(curr_batch_num)/float(batch_num)*100, 'tr_loss:', loss ) )
         sys.stdout.flush()
         
+    # flush iter progress and the train loss on screen
+    def _print_iter_progress( self, epoch, iter, batch_num ):
+        sys.stdout.write( "total iter: %d, epoch: %d, iter: %d \r" % (iter, epoch, iter%batch_num) )
+        sys.stdout.flush()
+        
     # check if the dim of output is correct
     def _check_data( self, y, loss_func ):
         if loss_func in ['categorical_crossentropy', 'binary_crossentropy', 'kl_divergence']:
@@ -199,8 +227,41 @@ class Model( Base ):
         self._any_layers_ = any_layers
         self._any_nodes_ = [ layer.output_ for layer in self._any_layers_ ]
 
-
-    def fit( self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], shuffle=True, verbose=1 ):
+    
+    # compile optimization function
+    def get_optimization_func( self, loss_func, optimizer, clip ):
+        # default objective
+        if type(loss_func) is str:
+            assert len(self.out_nodes_)==len(self.gt_nodes_), "If you are using default objectives, " \
+                                            + "out_node of out_layers must match ground truth!"
+            loss_node = sum( [ obj.get( loss_func )( pred_node, gt_node ) 
+                            for pred_node, gt_node in zip( self.out_nodes_, self.gt_nodes_ ) ] )
+        # user defined objective
+        else:
+            loss_node = loss_func( self )
+         
+        # gradient
+        params = self._get_all_params()
+        gparams = K.grad( loss_node + self._reg_value_, params )
+        
+        # todo clip gradient
+        if clip is not None:
+            gparams = [ K.clip( gparam, -clip, clip ) for gparam in gparams ]
+        
+        # gradient based opt
+        param_updates = optimizer.get_updates( params, gparams )
+        
+        # get all updates
+        updates = param_updates + self._inner_updates_
+        
+        # compile model
+        input_nodes = self.in_nodes_ + self.gt_nodes_
+        f = K.function_no_given( input_nodes, self._tr_phase_node_, [ loss_node ], updates )
+        return f
+        
+        
+    # prepare data
+    def preprocess_data( self, x, y, shuffle ):
         x = to_list( x )
         y = to_list( y )
         
@@ -211,40 +272,19 @@ class Model( Base ):
         # shuffle data
         if shuffle:
             x, y = supports.shuffle( x, y )
+            
+        return x, y
         
-        # check data
-        self._check_data( y, loss_func )
         
-        # init gt_nodes
-        self._gt_nodes_ = [ K.placeholder( e.ndim ) for e in y ]
+        
+    # execute optimization function
+    def do_optimization_func_epoch_wise( self, f, x, y, batch_size, n_epochs, callbacks, verbose ):
+        # callbacks' type must be 'epoch'
+        self._check_callback_type( callbacks, 'epoch' )
         
         # memory usage
         print "Train", 
         self._show_memory_usage( self._layer_list_, batch_size )
-        
-        # default objective
-        if type(loss_func) is str:
-            assert len(self._out_nodes_)==len(self._gt_nodes_), "If you are using default objectives, " \
-                                            + "out_node of out_layers must match ground truth!"
-            loss_node = sum( [ obj.get( loss_func )( pred_node, gt_node ) 
-                            for pred_node, gt_node in zip( self._out_nodes_, self._gt_nodes_ ) ] )
-        # user defined objective
-        else:
-            #loss_node = loss_func( self._out_nodes_, self._any_nodes_, gt_nodes )
-            loss_node = loss_func( self )
-         
-        # gradient
-        gparams = K.grad( loss_node + self._reg_value_, self._params_ )
-        
-        # todo clip gradient
-        if clip is not None:
-            gparams = [ K.clip( gparam, -clip, clip ) for gparam in gparams ]
-        
-        # gradient based opt
-        param_updates = optimizer.get_updates( self._params_, gparams )
-        
-        # get all updates
-        updates = param_updates + self._inner_updates_
         
         # compile for callback
         if callbacks is not None:
@@ -252,25 +292,18 @@ class Model( Base ):
             for callback in callbacks:
                 callback.compile( self ) 
 
-        # compile model
-        input_nodes = self._in_nodes_ + self._gt_nodes_
-        output_nodes = [ loss_node ]
-        f = K.function_no_given( input_nodes, self._tr_phase_node_, output_nodes, updates )
-
         # train
         N = len( x[0] )
-        batch_num = int( np.ceil( float(N) / batch_size ) )
-        n_abs_epoch = n_epochs + self._epoch_
+        batch_num = self._get_batch_num( N, batch_size )
+        max_epoch = n_epochs + self.epoch_
         
         # callback
-        print '\n0th epoch:'
+        print '\n', self.epoch_, 'th epoch:'
         for callback in callbacks:
-            if ( self._epoch_ % callback.call_freq == 0 ):
+            if ( self.epoch_ % callback.call_freq_ == 0 ):
                 callback.call()
         
-        while self._epoch_ < n_abs_epoch:
-            self._epoch_ += 1
-
+        while self.epoch_ < max_epoch:
             # train
             t1 = time.time()
             loss_list = []
@@ -280,17 +313,104 @@ class Model( Base ):
                 in_list = batch_x + batch_y + [1.]
                 loss = f( *in_list )[0]                     # training phase 
                 loss_list.append( loss )
-                if verbose==1: self._print_progress( self._epoch_, batch_num, i2 )
-                if verbose==2: self._print_progress_loss( self._epoch_, batch_num, i2, loss )
+                self._iter_ += 1
+                if verbose==1: self._print_progress( self.epoch_, batch_num, i2 )
+                if verbose==2: self._print_progress_loss( self.epoch_, batch_num, i2, loss )
+                
             t2 = time.time()
             self._tr_time_ += (t2 - t1)            
             if verbose!=0: print '\n', '    tr_time: ', "%.2f" % (t2-t1), 's'          # print an empty line
+            self._set_epoch( self.epoch_ + 1 )
             
             # callback
             for callback in callbacks:
-                if ( self._epoch_ % callback.call_freq == 0 ):
+                if ( self.epoch_ % callback.call_freq_ == 0 ):
                     callback.call()
+                    
+        
+    # execute optimization function
+    def do_optimization_func_iter_wise( self, f, x, y, batch_size, n_iters, callbacks, verbose ):
+        # callbacks' type must be 'epoch'
+        self._check_callback_type( callbacks, 'iter' )
+        
+        # memory usage
+        print "Train", 
+        self._show_memory_usage( self._layer_list_, batch_size )
+        
+        # compile for callback
+        if callbacks is not None:
+            callbacks = to_list( callbacks )
+            for callback in callbacks:
+                callback.compile( self ) 
 
+        # train
+        N = len( x[0] )
+        batch_num = self._get_batch_num( N, batch_size )
+        print "batch_num:", batch_num
+        print 'iter:', self.iter_, 'epoch:', self.epoch_, '\n'
+        
+        # callback
+        for callback in callbacks:
+            if ( self.iter_ % callback.call_freq_ == 0 ):
+                callback.call()
+                
+          
+        loss_list = []      
+        max_iter = self.iter_ + n_iters
+        t1 = time.time() 
+        
+        while self.iter_ < max_iter:
+            i2 = self.iter_ % batch_num
+            batch_x = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in x ]
+            batch_y = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in y ]
+            in_list = batch_x + batch_y + [1.]
+            loss = f( *in_list )[0]                     # training phase 
+            loss_list.append( loss )
+            self._set_epoch( self.iter_ / batch_num )
+            self._set_iter( self.iter_ + 1 )
+            if verbose==1: self._print_iter_progress( self.epoch_, self.iter_, batch_num )
+            
+            # callback
+            for callback in callbacks:
+                if ( self.iter_ % callback.call_freq_ == 0 ):
+                    #print '\n'
+                    callback.call()
+                    
+        t2 = time.time()
+        self._tr_time_ += (t2 - t1)            
+        if verbose!=0: print '    tr_time: ', "%.2f" % (t2-t1), 's \n'          # print an empty line
+    
+        
+    # fit data and train the neural network
+    def fit( self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], shuffle=True, verbose=1 ):
+        # set gt_nodes
+        self.set_gt_nodes( y )
+        
+        # compile optimization function
+        f = self.get_optimization_func( loss_func, optimizer, clip )
+        
+        # prepare data
+        _x, _y = self.preprocess_data( x, y, shuffle )
+        
+        # execute optimization function
+        self.do_optimization_func_epoch_wise( f=f, x=_x, y=_y, batch_size=batch_size, n_epochs=n_epochs, callbacks=callbacks, verbose=verbose )
+       
+        
+    def fit_iter( self, x, y, batch_size=100, n_iters=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], shuffle=True, verbose=1 ):
+        # set gt_nodes
+        self.set_gt_nodes( y )
+        
+        # compile optimization function
+        f = self.get_optimization_func( loss_func, optimizer, clip )
+        
+        # prepare data
+        _x, _y = self.preprocess_data( x, y, shuffle )
+        
+        # execute optimization function
+        self.do_optimization_func_iter_wise( f=f, x=_x, y=_y, batch_size=batch_size, n_iters=n_iters, callbacks=callbacks, verbose=verbose )
+        
+
+    # predict output using current model
     def predict( self, x, batch_size=100 ):
         # format data
         x = to_list( x )
@@ -329,6 +449,7 @@ class Model( Base ):
     @property
     def info_( self ):
         dict = { 'epoch': self.epoch_, 
+                 'iter': self.iter_, 
                  'in_ids': [ layer.id_ for layer in self._in_layers_ ], 
                  'out_ids': [ layer.id_ for layer in self._out_layers_ ], 
                  'inter_ids': [layer.id_ for layer in self._any_layers_] }
@@ -337,8 +458,24 @@ class Model( Base ):
     @classmethod
     def load_from_info( cls, in_layers, out_layers, any_layers, info ):
         md = cls( in_layers, out_layers, any_layers )
-        md._epoch_ = info['epoch']
+        md._set_epoch( info['epoch'] )
+        md._set_iter( info['iter'] )
         return md
+        
+        
+    # ------------ Private methods -------------
+    
+    # get batch size number
+    def _get_batch_num( self, N, batch_size ):
+        batch_num = int( np.ceil( float(N) / batch_size ) )
+        return batch_num
+        
+    def _check_callback_type( self, callbacks, cb_type ):
+        # compile for callback
+        if callbacks is not None:
+            callbacks = to_list( callbacks )
+            for cb in callbacks:
+                assert cb.type_==cb_type, "Error! Callback type should be '" + cb_type + "'!"
 
         
 class Sequential( Model ):
