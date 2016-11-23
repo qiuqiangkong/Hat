@@ -90,7 +90,11 @@ class Layer( object ):
     # Assign init value to weights. If init value is not given, then random is used. 
     def _init_params( self, init_val, init_type, shape, name ):
         if init_val is None:
-            return K.shared( initializations.get( init_type )( shape ), name )
+            if type(init_type) is str:
+                return K.shared( initializations.get( init_type )( shape ), name )
+            # if init_type is function
+            else:
+                return K.shared( init_type, name )
         else:
             return K.shared( init_val, name )
             
@@ -280,7 +284,7 @@ class Dense( Layer ):
         self._W_ = self._init_params( self._W_init_, self._init_type_, shape=(n_in, self._n_out_), name=str(self._name_)+'_W' )
 
         # init b
-        self._b_ = self._init_params( self._b_init_, 'zeros', shape=(self._n_out_,), name=str(self._id_)+'_b' )
+        self._b_ = self._init_params( self._b_init_, 'zeros', shape=(self._n_out_,), name=str(self._name_)+'_b' )
             
         # output
         lin_out = K.dot( input, self._W_ ) + self._b_
@@ -294,7 +298,7 @@ class Dense( Layer ):
         self._nexts_ = []
         self._out_shape_ = in_layers[0].out_shape_[0:-1] + (self._n_out_,)
         self._output_ = output
-        self._set_trainable_params()
+        self.set_trainable_params( self._trainable_params_ )
         self._reg_value_ = self._get_reg()
         
         # below are compulsory parts
@@ -324,16 +328,17 @@ class Dense( Layer ):
                  'W': self.W_, 
                  'b': self.b_, 
                  'W_reg_info': regularizations.get_info( self._W_reg_ ),
-                 'b_reg_info': regularizations.get_info( self._b_reg_ ), }
+                 'b_reg_info': regularizations.get_info( self._b_reg_ ), 
+                 'trainable_params': self._trainable_params_ }
         return dict
         
     # ---------- Public methods ----------
             
     # set trainable params
-    def _set_trainable_params( self ):
+    def set_trainable_params( self, trainable_params ):
         legal_params = [ 'W', 'b' ]
         self._params_ = []
-        for ch in self._trainable_params_:
+        for ch in trainable_params:
             assert ch in legal_params, "'ch' is not a param of " + self.__class__.__name__ + "! "
             self._params_.append( self.__dict__[ '_'+ch+'_' ] )
     
@@ -344,7 +349,8 @@ class Dense( Layer ):
         b_reg = regularizations.get_obj( info['b_reg_info'] )
 
         layer = cls( n_out=info['n_out'], act=info['act'], init_type=info['init_type'], 
-                     W_init=info['W'], b_init=info['b'], W_reg=W_reg, b_reg=b_reg, name=info['name'] )
+                     W_init=info['W'], b_init=info['b'], W_reg=W_reg, b_reg=b_reg, 
+                     trainable_params=info['trainable_params'], name=info['name'] )
                      
         return layer
     
