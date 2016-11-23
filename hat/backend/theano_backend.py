@@ -34,9 +34,13 @@ def shared( value, name=None, dtype=_FLOATX ):
 def format_data( value, dtype=_FLOATX ):
     return value.astype( dtype )
     
-# return value from GPU to CPU
+# return shared value from GPU to CPU
 def get_value( x ):
     return x.get_value()
+    
+# set shared value
+def set_value( x, val ):
+    return x.set_value( val )
     
 def cast( x, type ):
     return T.cast( x, type )
