@@ -13,51 +13,54 @@ Modified: 2016.05.27 Modify pad_trunc_seqs
 import numpy as np
 from supports import to_list
 
+
 # truncate seq or pad with 0, input can be list or np.ndarray
-# the element in x can be list or ndarray, then pad or trunc all elements in x to max_len
+# the element in x should be ndarray, then pad or trunc all elements in x to max_len
 # type: 'post' | 'pre'
+# return x_new (N*ndarray), mask(N*max_len)
 def pad_trunc_seqs( x, max_len, pad_type='post' ):
-    type_x = type( x )
-    N = len( x )
-    list_new = []
+    list_x_new, list_mask = [], []
     for e in x:
         L = len( e )
-        if type(e)==np.ndarray:
-            shape = e.shape
-            if L < max_len:
-                pad_shape = (max_len-L,) + shape[1:]
-                pad = np.zeros( pad_shape )
-                if pad_type=='pre': list_new.append( np.concatenate( (pad, e), axis=0 ) )
-                if pad_type=='post': list_new.append( np.concatenate( (e, pad), axis=0 ) )
-            else:
-                if pad_type=='pre': list_new.append( e[L-max_len:] )
-                if pad_type=='post': list_new.append( e[0:max_len] )
-        if type(e)==list:
-            if L < max_len:
-                pad = [0] * ( max_len - L )
-                if pad_type=='pre': list_new.append( pad + e )
-                if pad_type=='post': list_new.append( e + pad )
-            else:
-                if pad_type=='pre': list_new.append( e[L-max_len:] )
-                if pad_type=='post': list_new.append( e[0:max_len] )
+        e_new, mask = pad_trunc_seq( e, max_len, pad_type )
+        list_x_new.append( e_new )
+        list_mask.append( mask )
     
+    type_x = type( x )
     if type_x==list:
-        return list_new
-    if type_x==np.ndarray:
-        return np.array( list_new )
-        
+        return list_x_new, list_mask
+    elif type_x==np.ndarray:
+        return np.array( list_x_new ), np.array( list_mask )
+    else:
+        raise Exception( "Input should be list or ndarray!" )
+
+   
 # pad or trunc seq, x should be ndarray
+# return x_new (ndarray), mask (1d array)
 def pad_trunc_seq( x, max_len, pad_type='post' ):
     L = len(x)
     shape = x.shape
     if L < max_len:
         pad_shape = (max_len-L,) + shape[1:]
         pad = np.zeros( pad_shape )
-        if pad_type=='pre': return np.concatenate( (pad, x), axis=0 )
-        if pad_type=='post': return np.concatenate( (x, pad), axis=0 )
+        if pad_type=='pre': 
+            x_new = np.concatenate( (pad, x), axis=0 )
+            mask = np.concatenate( [ np.zeros(max_len-L), np.ones(L) ] )
+        elif pad_type=='post': 
+            x_new = np.concatenate( (x, pad), axis=0 )
+            mask = np.concatenate( [ np.ones(L), np.zeros(max_len-L) ] )
+        else:
+            raise Exception("pad_type should be 'post' | 'pre'!")
     else:
-        if pad_type=='pre': return x[L-max_len:]
-        if pad_type=='post': return x[0:max_len]
+        if pad_type=='pre':
+            x_new = x[L-max_len:]
+            mask = np.ones( max_len )
+        elif pad_type=='post':
+            x_new = x[0:max_len]
+            mask = np.ones( max_len )
+        else:
+            raise Exception("pad_type should be 'post' | 'pre'!")
+    return x_new, mask
 
 # enframe sequence to matrix
 def enframe( x, win, inc ):
