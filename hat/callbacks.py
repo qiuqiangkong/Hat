@@ -26,6 +26,11 @@ Callback is an abstract class
 '''
 class Callback( object ):
     __metaclass__ = ABCMeta
+    
+    def __init__( self, call_freq, type ):
+        assert ( type=='epoch' or type=='iter' ), "Error! type must be 'epoch' | 'iter'!"
+        self._call_freq_ = call_freq
+        self._type_ = type
         
     @abstractmethod
     def compile( self ):
@@ -36,20 +41,24 @@ class Callback( object ):
         pass
         
     @property
-    def call_freq( self ):
+    def call_freq_( self ):
         return self._call_freq_
+        
+    @property
+    def type_( self ):
+        return self._type_
         
 '''
 Templete for creating a new Callback class
 '''
 class YourCallback( Callback ):
-    def __init__( self, call_freq=3, # other params
+    def __init__( self, call_freq=3, type='epoch', # other params
                 ):
-        self._call_freq = call_freq
+        super( YourCallback, self ).__init__( call_freq, type )
         # your code here
         
     def compile( self, md ):
-        self._md = md
+        self._md = md_
         # your code here
         
     def call( self, # other params
@@ -63,12 +72,13 @@ metric_types can be list or string
 '''
 class Validation( Callback ):
     def __init__( self, tr_x=None, tr_y=None, va_x=None, va_y=None, te_x=None, te_y=None, batch_size=100,
-                  call_freq=3, metrics=['categorical_error'], dump_path='validation.p', verbose=1):
+                  call_freq=3, metrics=['categorical_error'], dump_path='validation.p', type='epoch', verbose=1):
         # init values
+        super( Validation, self ).__init__( call_freq, type )
         self._batch_size_ = batch_size
-        self._call_freq_ = call_freq
         self._metrics_ = to_list( metrics )
         self._dump_path_ = dump_path
+        self._type_ = type
         self._verbose_ = verbose
         self._r_ = self._init_result()
         
@@ -158,7 +168,6 @@ class Validation( Callback ):
         # compile evaluation function
         if not hasattr( self, '_f_evaluate' ):
             print 'compiling evaluation function ..'
-            #input_nodes = self._md_.in_nodes_ + gt_nodes
             input_nodes = self._md_.in_nodes_ + self._md_.gt_nodes_
             self._f_evaluate = K.function_no_given( input_nodes, self._md_.tr_phase_node_, loss_nodes )
             print 'compile finished. '
@@ -218,15 +227,19 @@ class Validation( Callback ):
 Save Model every n-epoches
 '''
 class SaveModel( Callback ):
-    def __init__( self, dump_fd, call_freq=3 ):
+    def __init__( self, dump_fd, call_freq=3, type='epoch' ):
+        super( SaveModel, self ).__init__( call_freq, type )
         self._dump_fd_ = dump_fd
-        self._call_freq_ = call_freq
         
     def compile( self, md ):
         self._md_ = md
         
     def call( self ):
-        dump_path = self._dump_fd_ + '/md' + str(self._md_.epoch_) + '.p'
+        if self.type_ == 'epoch':
+            dump_path = self._dump_fd_ + '/md' + str(self._md_.epoch_) + '_epochs.p'
+        elif self.type_ == 'iter':
+            dump_path = self._dump_fd_ + '/md' + str(self._md_.iter_) + '_iters.p'
+            
         serializations.save( self._md_, dump_path )
         
             
