@@ -171,7 +171,7 @@ border_mode: 'valid' | 'full' | (a1, a2) (pad with this tuple then do valid conv
 '''
 class Convolution2D( Layer ):
     def __init__( self, n_outfmaps, n_row, n_col, act, init_type='glorot_uniform', border_mode='valid', strides=(1,1),
-                  W_init=None, b_init=None, W_reg=None, b_reg=None, name=None ):
+                  W_init=None, b_init=None, W_reg=None, b_reg=None, trainable_params=['W','b'], name=None ):
         super( Convolution2D, self ).__init__( name )
         self._n_outfmaps_ = n_outfmaps
         self._n_row_ = n_row
@@ -184,6 +184,7 @@ class Convolution2D( Layer ):
         self._b_init_ = b_init
         self._W_reg_ = W_reg
         self._b_reg_ = b_reg
+        self._trainable_params_ = trainable_params
         
     def __call__( self, in_layers ):
         # only one input layer is allowed
@@ -213,7 +214,7 @@ class Convolution2D( Layer ):
         self._nexts_ = []
         self._out_shape_ = self._get_out_shape( height, width, self._n_row_, self._n_col_, self._border_mode_, self._strides_ )
         self._output_ = output
-        self._params_ = [ self._W_, self._b_ ]
+        self.set_trainable_params( self._trainable_params_ )
         self._reg_value_ = self._get_reg()
         
         # below are compulsory parts
@@ -250,6 +251,14 @@ class Convolution2D( Layer ):
         return dict
     
     # ---------- Public methods ----------
+    
+    # set trainable params
+    def set_trainable_params( self, trainable_params ):
+        legal_params = [ 'W', 'b' ]
+        self._params_ = []
+        for ch in trainable_params:
+            assert ch in legal_params, "'ch' is not a param of " + self.__class__.__name__ + "! "
+            self._params_.append( self.__dict__[ '_'+ch+'_' ] )
     
     # load layer from info
     @classmethod
