@@ -29,15 +29,22 @@ def eye( len ):
 '''
 uniform tensor
 '''
-def uniform( shape, scale=0.05 ):
+def uniform( shape, scale=0.01 ):
     return np.random.uniform( -scale, scale, shape )
     
 '''
 glorot uniform
 [1] Glorot, Xavier, and Yoshua Bengio. "Understanding the difficulty of training deep feedforward neural networks." 2010.
 '''
-def glorot_uniform( shape )   :
-    scale = np.sqrt( 6. / sum( shape ) )
+def glorot_uniform( shape ):
+    if len(shape)==2:
+        fan_in, fan_out = shape[0], shape[1]
+    elif len(shape)==4:
+        receptive_field_size = shape[2]*shape[3]
+        fan_in = shape[1] * receptive_field_size
+        fan_out = shape[0] * receptive_field_size
+
+    scale = np.sqrt( 6. / ( fan_in+fan_out ) )
     return uniform( shape, scale )
 
 
