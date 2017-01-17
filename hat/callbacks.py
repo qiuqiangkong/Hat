@@ -241,6 +241,7 @@ class SaveModel( Callback ):
             dump_path = self._dump_fd_ + '/md' + str(self._md_.iter_) + '_iters.p'
             
         serializations.save( self._md_, dump_path )
+        print "    Save to " + dump_path + " successfully!\n"
         
             
         
