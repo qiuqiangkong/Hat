@@ -261,7 +261,7 @@ class InputLayer( Layer ):
 Dense Layer
 '''
 class Dense( Layer ):
-    def __init__( self, n_out, act, init_type='glorot_uniform', 
+    def __init__( self, n_out, act, init_type='uniform', 
                   W_init=None, b_init=None, W_reg=None, b_reg=None, trainable_params=['W','b'], name=None ):
                       
         super( Dense, self ).__init__( name )
