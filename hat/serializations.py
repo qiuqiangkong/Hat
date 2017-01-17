@@ -116,7 +116,7 @@ def load( path ):
     # find in_layers & out_layers
     in_layers = [ _find_layer( layer_list, id ) for id in md_info['in_ids'] ]
     out_layers = [ _find_layer( layer_list, id ) for id in md_info['out_ids'] ]
-    inter_layers = [ _find_layer( layer_list, id ) for id in md_info['inter_ids'] ]
+    inter_layers = [ _find_layer( layer_list, id ) for id in md_info['any_ids'] ]
     
     # construct model
     md = md_func.load_from_info( in_layers, out_layers, inter_layers, md_info )
