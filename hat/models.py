@@ -452,7 +452,7 @@ class Model( Base ):
                  'iter': self.iter_, 
                  'in_ids': [ layer.id_ for layer in self._in_layers_ ], 
                  'out_ids': [ layer.id_ for layer in self._out_layers_ ], 
-                 'inter_ids': [layer.id_ for layer in self._any_layers_] }
+                 'any_ids': [layer.id_ for layer in self._any_layers_] }
         return dict
     
     @classmethod
