@@ -139,6 +139,9 @@ def ifelse( condition, op1, op2 ):
 def swapaxes( x, axis1, axis2 ):
     return T.swapaxes( x, axis1, axis2 )
     
+def moving_average( running_val, val, momentum ):
+    return momentum * running_val + ( 1 - momentum ) * val
+    
 # broadcast
 # e.g. broadcast( x, x_ndim=1, bd_axes=(0,2,3) )
 #      then return tensor dimshuffle according to ('x',0,'x','x')
@@ -153,6 +156,10 @@ def broadcast( x, x_ndim, bc_axes  ):
             
     return x.dimshuffle( shuffle_str )
     
+# batch normliazation
+def batch_normalization( inputs, gamma, beta, mean, var, eps ):
+    return T.nnet.bn.batch_normalization( inputs, gamma, beta, mean, T.sqrt(var+eps), mode='high_mem' )
+    
 ### random number
 def rng_normal( size, avg, std ):
     seed = np.random.randint(10e6)
@@ -161,7 +168,7 @@ def rng_normal( size, avg, std ):
 
 # binomial distribution. p is p(y=1)    
 def rng_binomial( shape, p ):
-    seed = np.random.randint(10e6)
+    seed = np.random.randint(1,10e6)
     rng = RandomStreams(seed)
     return rng.binomial( shape, n=1, p=p, dtype=_FLOATX )
     
@@ -182,7 +189,6 @@ def relu( x, alpha, max_value ):
     y = T.nnet.relu( x, alpha )
     if max_value is not None:
         y = T.minimum( y, max_value )
-    y += 1e-8       # used for avoiding masking
     return y
     
 ### objectives
