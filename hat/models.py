@@ -227,7 +227,7 @@ class Model( Base ):
         self._any_layers_ = any_layers
         self._any_nodes_ = [ layer.output_ for layer in self._any_layers_ ]
 
-    
+    ###
     # compile optimization function
     def get_optimization_func( self, loss_func, optimizer, clip ):
         # default objective
@@ -259,7 +259,7 @@ class Model( Base ):
         f = K.function_no_given( input_nodes, self._tr_phase_node_, [ loss_node ], updates )
         return f
         
-        
+    ###
     # prepare data
     def preprocess_data( self, x, y, shuffle ):
         x = to_list( x )
@@ -268,17 +268,13 @@ class Model( Base ):
         # format
         x = [ K.format_data(e) for e in x ]
         y = [ K.format_data(e) for e in y ]
-        
-        # shuffle data
-        if shuffle:
-            x, y = supports.shuffle( x, y )
-            
+    
         return x, y
         
         
-        
+    ###
     # execute optimization function
-    def do_optimization_func_epoch_wise( self, f, x, y, batch_size, n_epochs, callbacks, verbose ):
+    def do_optimization_func_epoch_wise( self, f, x, y, batch_size, n_epochs, shuffle, callbacks, verbose ):
         # callbacks' type must be 'epoch'
         self._check_callback_type( callbacks, 'epoch' )
         
@@ -304,6 +300,10 @@ class Model( Base ):
                 callback.call()
         
         while self.epoch_ < max_epoch:
+            # shuffle data
+            if shuffle:
+                x, y = supports.shuffle( x, y )
+
             # train
             t1 = time.time()
             loss_list = []
@@ -329,7 +329,11 @@ class Model( Base ):
                     
         
     # execute optimization function
-    def do_optimization_func_iter_wise( self, f, x, y, batch_size, n_iters, callbacks, verbose ):
+    def do_optimization_func_iter_wise( self, f, x, y, batch_size, n_iters, shuffle, callbacks, verbose ):
+        # shuffle data
+        if shuffle:
+            x, y = supports.shuffle( x, y )
+        
         # callbacks' type must be 'epoch'
         self._check_callback_type( callbacks, 'iter' )
         
@@ -381,6 +385,7 @@ class Model( Base ):
         if verbose!=0: print '    tr_time: ', "%.2f" % (t2-t1), 's \n'          # print an empty line
     
         
+    ###
     # fit data and train the neural network
     def fit( self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], shuffle=True, verbose=1 ):
         # set gt_nodes
@@ -393,7 +398,7 @@ class Model( Base ):
         _x, _y = self.preprocess_data( x, y, shuffle )
         
         # execute optimization function
-        self.do_optimization_func_epoch_wise( f=f, x=_x, y=_y, batch_size=batch_size, n_epochs=n_epochs, callbacks=callbacks, verbose=verbose )
+        self.do_optimization_func_epoch_wise( f=f, x=_x, y=_y, batch_size=batch_size, n_epochs=n_epochs, callbacks=callbacks, shuffle=shuffle, verbose=verbose )
        
         
     def fit_iter( self, x, y, batch_size=100, n_iters=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], shuffle=True, verbose=1 ):
@@ -407,9 +412,21 @@ class Model( Base ):
         _x, _y = self.preprocess_data( x, y, shuffle )
         
         # execute optimization function
-        self.do_optimization_func_iter_wise( f=f, x=_x, y=_y, batch_size=batch_size, n_iters=n_iters, callbacks=callbacks, verbose=verbose )
+        self.do_optimization_func_iter_wise( f=f, x=_x, y=_y, batch_size=batch_size, n_iters=n_iters, shuffle=shuffle, callbacks=callbacks, verbose=verbose )
+       
+       
+    def train_on_batch( self, batch_x, batch_y, func ):
+        batch_x, batch_y = self.preprocess_data( batch_x, batch_y, shuffle=None )
+        
+        in_list = batch_x + batch_y + [1.]
+        loss = func( *in_list )[0]                     # training phase 
+        self._set_iter( self.iter_ + 1 )
+        
+        return loss
+         
         
 
+    ###
     # predict output using current model
     def predict( self, x, batch_size=100 ):
         # format data
