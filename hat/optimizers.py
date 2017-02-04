@@ -12,7 +12,7 @@ import backend as K
 Base class for optimization classes
 '''
 class Base( object ):
-    # reset the memory
+    # reset the memory to zero
     def _reset_memory( self, memory ):
         for i1 in xrange( len( memory ) ):
             K.set_value( memory[i1], np.zeros_like( memory[i1].get_value() ) )
@@ -118,7 +118,7 @@ Rmsprop
 [1] Tieleman, Tijmen, and Geoffrey Hinton. "Lecture 6.5-rmsprop: Divide the gradient by a running average of its recent magnitude." COURSERA: Neural Networks for Machine Learning 4.2 (2012).
 '''
 class Rmsprop( Base ):
-    def __init__( self, lr=0.001, rho=0.9, eps=1e-6 ):
+    def __init__( self, lr=0.001, rho=0.9, eps=1e-8 ):
         super( Rmsprop, self ).__init__()
         self._lr_ = lr
         self._rho_ = rho
@@ -150,13 +150,57 @@ class Rmsprop( Base ):
 Adam
 [1] Kingma, Diederik, and Jimmy Ba. "Adam: A method for stochastic optimization." arXiv preprint arXiv:1412.6980 (2014).
 '''        
+# # Slow version
+# class Adam( Base ):
+#     def __init__( self, lr=1e-3, beta1=0.9, beta2=0.999, eps=1e-8 ):
+#         self._alpha_ = lr
+#         self._beta1_ = beta1
+#         self._beta2_ = beta2
+#         self._eps_ = eps
+#         self._epoch_ = K.shared(1)
+#         
+#         
+#     def get_updates( self, params, gparams ):
+#         self._ms_ = []
+#         self._vs_ = []
+#         for param in params:    
+#             self._ms_ += [ K.shared( np.zeros_like( param.get_value() ) ) ]
+#             self._vs_ += [ K.shared( np.zeros_like( param.get_value() ) ) ]
+#                     
+#         update_params = []
+#         update_ms = []
+#         update_vs = []
+#         
+#         for i1 in xrange( len(params) ):
+#             m_new = self._beta1_ * self._ms_[i1] + ( 1 - self._beta1_ ) * gparams[i1]
+#             v_new = self._beta2_ * self._vs_[i1] + ( 1 - self._beta2_ ) * gparams[i1]**2
+#             m_unbias = m_new / ( 1 - K.power( self._beta1_, self._epoch_ ) )
+#             v_unbias = v_new / ( 1 - K.power( self._beta2_, self._epoch_ ) )
+#             param_new = params[i1] - self._alpha_ * m_unbias / ( K.sqrt( v_unbias ) + self._eps_ )
+#             update_ms += [ ( self._ms_[i1], m_new ) ]
+#             update_vs += [ ( self._vs_[i1], v_new ) ]
+#             update_params += [ ( params[i1], param_new) ]
+#             
+#         update_epoch = [ ( self._epoch_, self._epoch_ + 1.) ]
+#         
+#         updates = update_params + update_ms + update_vs + update_epoch
+#         return updates
+#         
+#         
+#     # reset memories to zero, epoch to 1
+#     def reset( self ):
+#         self._reset_memory( self._ms_ )
+#         self._reset_memory( self._vs_ )
+#         K.set_value( self._epoch_, 1 )
+
+# Fast version
 class Adam( Base ):
     def __init__( self, lr=1e-3, beta1=0.9, beta2=0.999, eps=1e-8 ):
         self._alpha_ = lr
         self._beta1_ = beta1
         self._beta2_ = beta2
         self._eps_ = eps
-        self._epoch_ = K.shared(1)
+        self._iter_ = K.shared(0)
         
         
     def get_updates( self, params, gparams ):
@@ -165,29 +209,29 @@ class Adam( Base ):
         for param in params:    
             self._ms_ += [ K.shared( np.zeros_like( param.get_value() ) ) ]
             self._vs_ += [ K.shared( np.zeros_like( param.get_value() ) ) ]
-                    
-        update_params = []
+
         update_ms = []
         update_vs = []
+        update_params = []
+        
+        t = self._iter_ + 1
+        alpha_t = self._alpha_ * K.sqrt( 1 - K.power( self._beta2_, t ) ) / ( 1 - K.power( self._beta1_, t ) )
         
         for i1 in xrange( len(params) ):
             m_new = self._beta1_ * self._ms_[i1] + ( 1 - self._beta1_ ) * gparams[i1]
-            v_new = self._beta2_ * self._vs_[i1] + ( 1 - self._beta2_ ) * gparams[i1]**2
-            m_unbias = m_new / ( 1 - K.power( self._beta1_, self._epoch_ ) )
-            v_unbias = v_new / ( 1 - K.power( self._beta2_, self._epoch_ ) )
-            param_new = params[i1] - self._alpha_ * m_unbias / ( K.sqrt( v_unbias ) + self._eps_ )
+            v_new = self._beta2_ * self._vs_[i1] + ( 1 - self._beta2_ ) * K.sqr( gparams[i1] )
+            param_new = params[i1] - alpha_t * m_new / ( K.sqrt( v_new ) + self._eps_ )
             update_ms += [ ( self._ms_[i1], m_new ) ]
             update_vs += [ ( self._vs_[i1], v_new ) ]
             update_params += [ ( params[i1], param_new) ]
             
-        update_epoch = [ ( self._epoch_, self._epoch_ + 1.) ]
-        
-        updates = update_params + update_ms + update_vs + update_epoch
+        update_iter = [ ( self._iter_, self._iter_ + 1.) ]
+        updates = update_params + update_ms + update_vs + update_iter
         return updates
         
         
-    # reset memories to zero, epoch to 1
+    # reset memories to zero, iter to 0
     def reset( self ):
         self._reset_memory( self._ms_ )
         self._reset_memory( self._vs_ )
-        K.set_value( self._epoch_, 1 )
+        K.set_value( self._iter_, 0 )
