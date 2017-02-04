@@ -37,10 +37,13 @@ def get_mask( input ):
 # shuffle data
 def shuffle( xs, ys ):
     N = len( xs[0] )
+    assert all( len(e)==N for e in xs ) and all( len(e)==N for e in ys ), "all the length of elements in xs and ys should be equal!"
     idx = np.arange(N)
     np.random.shuffle( idx )
+    
     xs = [ x[idx] for x in xs ]
     ys = [ y[idx] for y in ys ]
+    
     return xs, ys
     
 # x, y, mask should be list of ndarray of same batch_num
