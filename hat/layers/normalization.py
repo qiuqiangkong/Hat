@@ -11,24 +11,26 @@ from core import Layer
 '''
 Batch normalization layer
 [1] Ioffe, Sergey, et al. "Batch normalization: Accelerating deep network training by reducing internal covariate shift.", 2015
+Usage: axes is aggregate which axes to normalize, e.g. axes=[0] for DNN; axes=[0,2,3] for CNN
 '''
 class BN( Layer ):
-    def __init__( self, axes, gamma_init=None, beta_init=None, running_mean_init=None, running_var_init=None, name=None ):
+    def __init__( self, axes, gamma_init=None, beta_init=None, running_mean_init=None, running_var_init=None, trainable_params=['gamma', 'beta'], name=None ):
         super( BN, self ).__init__( name )
         self._gamma_init_ = gamma_init
         self._beta_init_ = beta_init
         self._axes_ = axes
-        self._epsilon_ = 1e-8
+        self._eps_ = 1e-3
         self._momentum_ = 0.99
         self._running_mean_init_ = running_mean_init
         self._running_var_init_ = running_var_init
+        self._trainable_params_ = trainable_params
         self._tr_phase_node_ = K.common_tr_phase_node
         
     def __call__( self, in_layers ):
         # only one input layer is allowed
         in_layers = to_list( in_layers )
         axes = to_tuple( self._axes_ )
-        assert len(in_layers)==1, "The input of Dense can only be one layer!"
+        assert len(in_layers)==1, "The input can only be one layer!"
         in_layer = in_layers[0]
         input = in_layer.output_
         
@@ -42,7 +44,7 @@ class BN( Layer ):
                                          
         self._running_mean_ = self._init_params( self._running_mean_init_, 'zeros', shape=bn_param_shape, 
                                          name=str(self._name_)+'_running_mean' )
-        self._running_var_ = self._init_params( self._running_var_init_, 'zeros', shape=bn_param_shape, 
+        self._running_var_ = self._init_params( self._running_var_init_, 'ones', shape=bn_param_shape, 
                                          name=str(self._name_)+'_running_var' )                                
         
         # do batch normalization
@@ -74,6 +76,14 @@ class BN( Layer ):
         return K.get_value( self._beta_ )
         
     @property
+    def running_mean_( self ):
+        return K.get_value( self._running_mean_ )
+
+    @property
+    def running_var_( self ):
+        return K.get_value( self._running_var_ )
+        
+    @property
     def inner_updates_( self ):
         return self._inner_updates_
         
@@ -83,9 +93,12 @@ class BN( Layer ):
         dict = { 'class_name': self.__class__.__name__, 
                  'id': self._id_, 
                  'name': self._name_, 
+                 'axes': self._axes_, 
                  'gamma': self.gamma_, 
                  'beta': self.beta_, 
-                 'axes': self._axes_, 
+                 'running_mean': self.running_mean_, 
+                 'running_var': self.running_var_, 
+                 'trainable_params': self._trainable_params_, 
                   }
         return dict
         
@@ -94,8 +107,19 @@ class BN( Layer ):
     # load layer from info
     @classmethod
     def load_from_info( cls, info ):
-        layer = cls( gamma_init=info['gamma'], beta_init=info['beta'], axes=info['axes'], name=info['name'] )
+        layer = cls( axes=info['axes'], gamma_init=info['gamma'], beta_init=info['beta'], 
+                     running_mean_init=info['running_mean'], running_var_init=info['running_var'], 
+                     trainable_params=info['trainable_params'], name=info['name']
+                   )
         return layer
+        
+    # set trainable params
+    def set_trainable_params( self, trainable_params ):
+        legal_params = [ 'gamma', 'beta' ]
+        self._params_ = []
+        for ch in trainable_params:
+            assert ch in legal_params, "'ch' is not a param of " + self.__class__.__name__ + "! "
+            self._params_.append( self.__dict__[ '_'+ch+'_' ] )
         
     # ---------- Private methods ----------
         
@@ -103,10 +127,6 @@ class BN( Layer ):
     def _tr_phase( self, input, bn_param_shape, axes ):
         mean_ = K.mean( input, axes )
         var_ = K.var( input, axes )
-        
-        # update running mean & var
-        inner_updates = [ (self._running_mean_, self._momentum_ * self._running_mean_ + ( 1 - self._momentum_ ) * mean_), 
-                          (self._running_var_, self._momentum_ * self._running_var_ + ( 1 - self._momentum_ ) * var_) ]
 
         # get broadcast mean & var, gamma & var
         bc_mean_ = K.broadcast( x=mean_, x_ndim=len(bn_param_shape), bc_axes=axes )
@@ -115,8 +135,14 @@ class BN( Layer ):
         bc_beta_ = K.broadcast( x=self._beta_, x_ndim=len(bn_param_shape), bc_axes=axes )
         
         # get batch normalized output
-        x_hat = ( input - bc_mean_ ) / K.sqrt( bc_var_ + self._epsilon_ )
-        output = x_hat * bc_gamma_ + bc_beta_
+        output = K.batch_normalization( input, bc_gamma_, bc_beta_, bc_mean_, bc_var_, self._eps_ )
+        
+        # update running mean & var
+        new_running_mean = K.moving_average( self._running_mean_, mean_, self._momentum_)
+        new_running_var = K.moving_average( self._running_var_, var_, self._momentum_ )
+        
+        inner_updates = [ (self._running_mean_, new_running_mean), 
+                          (self._running_var_, new_running_var) ]
         
         self._inner_updates_ = inner_updates
         
@@ -130,7 +156,7 @@ class BN( Layer ):
         bc_gamma_ = K.broadcast( x=self._gamma_, x_ndim=len(bn_param_shape), bc_axes=axes )
         bc_beta_ = K.broadcast( x=self._beta_, x_ndim=len(bn_param_shape), bc_axes=axes )
         
-        output = ( input - bc_running_mean_ ) / K.sqrt( bc_running_var_ + self._epsilon_ ) * bc_gamma_ + bc_beta_
+        output = K.batch_normalization( input, bc_gamma_, bc_beta_, bc_running_mean_, bc_running_var_, self._eps_ )
         return output
         
     # get normlize shape
@@ -141,7 +167,6 @@ class BN( Layer ):
                 bn_param_shape += (out_shape[i1],)
         return bn_param_shape
 
-    # ------------------------------------
     
     
     
