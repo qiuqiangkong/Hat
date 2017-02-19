@@ -99,7 +99,7 @@ border_mode: 'valid' | 'full' | #a1 (pad with this #a1 then do valid conv)
 #     # layer's info
 #     @property
 #     def info_(self):
-#         dict = { 'class_name': self.__class__.__name__, 
+#         dict = {'class_name': self.__class__.__name__, 
 #                  'id': self._id_, 
 #                  'name': self._name_, 
 #                  'n_outfmaps': self._n_outfmaps_, 
@@ -111,7 +111,7 @@ border_mode: 'valid' | 'full' | #a1 (pad with this #a1 then do valid conv)
 #                  'W': self.W_, 
 #                  'b': self.b_, 
 #                  'W_reg_info': regularizations.get_info(self._W_reg_),
-#                  'b_reg_info': regularizations.get_info(self._b_reg_), }
+#                  'b_reg_info': regularizations.get_info(self._b_reg_),}
 #         return dict
 #     
 #     # ---------- Public methods ----------
@@ -244,7 +244,7 @@ class Convolution2D(Layer):
     @property
     def info_(self):
         kwargs = self._base_kwargs_
-        info = { 'class_name': self.__class__.__name__, 
+        info = {'class_name': self.__class__.__name__, 
                  'id': self._id_, 
                  'name': self._name_, 
                  'n_outfmaps': self._n_outfmaps_, 
@@ -257,7 +257,7 @@ class Convolution2D(Layer):
                  'b': self.b_, 
                  'W_reg_info': regularizations.get_info(self._W_reg_),
                  'b_reg_info': regularizations.get_info(self._b_reg_), 
-                 'kwargs': kwargs }
+                 'kwargs': kwargs}
         return info
     
     # ---------- Public methods ----------
@@ -341,9 +341,9 @@ class UpSampling2D(Lambda):
     @property
     def info_(self):
         kwargs = self._base_kwargs_
-        info = { 'class_name': self.__class__.__name__, 
+        info = {'class_name': self.__class__.__name__, 
                  'size': self._size_, 
-                 'kwargs': kwargs }
+                 'kwargs': kwargs}
         return info
         
     # ---------- Public methods ----------
