@@ -236,7 +236,7 @@ class InputLayer(Layer):
     @property
     def info_(self):
         kwargs = self._base_kwargs_
-        info = { 'class_name': self.__class__.__name__, 
+        info = {'class_name': self.__class__.__name__, 
                  'in_shape': self._in_shape_, 
                  'kwargs': kwargs}
         return info
@@ -320,7 +320,7 @@ class Dense(Layer):
     @property
     def info_(self):
         kwargs = self._base_kwargs_
-        info = { 'class_name': self.__class__.__name__,
+        info = {'class_name': self.__class__.__name__,
                  'n_out': self._n_out_, 
                  'act': self._act_, 
                  'init_type': self._init_type_,     # mute if W is None
@@ -329,7 +329,7 @@ class Dense(Layer):
                  'W_reg_info': regularizations.get_info(self._W_reg_),
                  'b_reg_info': regularizations.get_info(self._b_reg_), 
                  'trainable_params': self._trainable_params_, 
-                 'kwargs': kwargs }
+                 'kwargs': kwargs}
         return info
         
     # ---------- Public methods ----------
@@ -409,9 +409,9 @@ class Activation(Layer):
     @property
     def info_(self):
         kwargs = self._base_kwargs_
-        info = { 'class_name': self.__class__.__name__, 
+        info = {'class_name': self.__class__.__name__, 
                  'act_func': self._act_func, 
-                 'kwargs': kwargs }
+                 'kwargs': kwargs}
         return info
            
     # ---------- Public methods ----------
@@ -468,7 +468,7 @@ class Lambda(Layer):
     def info_(self):
         kwargs = self._kwargs_
         kwargs.update(self._base_kwargs_)
-        info = { 'class_name': self.__class__.__name__, 
+        info = {'class_name': self.__class__.__name__, 
                  'fn': self._fn, 
                  'kwargs': kwargs}
         return info
@@ -533,9 +533,9 @@ class Flatten(Lambda):
     @property
     def info_(self):
         kwargs = self._base_kwargs_
-        info = { 'class_name': self.__class__.__name__, 
+        info = {'class_name': self.__class__.__name__, 
                  'ndim': self._ndim_, 
-                 'kwargs': kwargs }
+                 'kwargs': kwargs}
         return info
         
     # ---------- Public methods ----------
@@ -566,10 +566,10 @@ class Reshape(Lambda):
     #     
     # @property
     # def info_(self):
-    #     dict = { 'class_name': self.__class__.__name__, 
+    #     dict = {'class_name': self.__class__.__name__, 
     #              'id': self._id_, 
     #              'name': self._name_,
-    #              'out_shape': self._out_shape_, }
+    #              'out_shape': self._out_shape_,}
     #     return dict
     #        
     # # ---------- Public methods ----------
@@ -618,9 +618,9 @@ class Dropout(Layer):
     @property
     def info_(self):
         kwargs = self._base_kwargs_
-        info = { 'class_name': self.__class__.__name__, 
+        info = {'class_name': self.__class__.__name__, 
                  'p_drop': self._p_drop_, 
-                 'kwargs': kwargs }
+                 'kwargs': kwargs}
         return info
         
     # ---------- Public methods ----------
