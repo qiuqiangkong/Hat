@@ -2,12 +2,13 @@
 SUMMARY:  Build Model
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.01
-Modified: 2016.07.25 Modify fit() to batch version
-          2016.07.29 Replace [[]] * n with [ [] for e in self._out_nodes ]
+Modified: 2017.02.19
 --------------------------------------
 '''
+
 import sys
-from supports import to_list, BFT, shuffle, memory_usage
+from supports import to_list, shuffle, memory_usage, Timer
+import numpy as np
 import supports
 from optimizers import *
 from globals import reset_id_to_zero
@@ -16,453 +17,564 @@ import objectives as obj
 import backend as K
 import time
 import numpy as np
-import networkx as nx
 import matplotlib.pyplot as plt
 import pickle
 
-class Base( object ):
-    def __init__( self, in_layers ):
-        # reset global id
-        reset_id_to_zero()
+
+class Model(Base):
+    """Build deep learning model.
+    Methods:
+      summary()
+      get_effective_layers()
+      set_layers_trainability()
+      set_trainability()
+      find_layer()
+      add_models()
+      joint_models()
+      compile()
+      get_optimization_func()
+      fit()
+      train_on_batch()
+      predict()
+      get_observe_forward_func()
+      get_observe_backward_func()
+      run_function()
+      
+    Args:
+      in_layers: a list of layer
+      out_layers: a list of layer
+      any_layers: a list of layer
+    """
+    def __init__(self, in_layers=[], out_layers=[], any_layers=[]):
+        self._in_layers_ = to_list(in_layers)
+        self._out_layers_ = to_list(out_layers)
+        self._any_layers_ = to_list(any_layers)
+
+        self._gt_nodes_ = None
+        self._f_predict = None
         
-        # inlayers
-        in_layers = to_list( in_layers )
-        self._in_layers_ = in_layers
-        self._in_nodes_ = [ layer.output_ for layer in self._in_layers_ ]
-        
-        # find all nodes using BFT
-        self._id_list_, self._layer_list_ = BFT( self._in_layers_ )
-        
-        # get inner updates by traveling all layers
-        self._inner_updates_ = []
-        for layer in self._layer_list_:
-            if hasattr( layer, 'inner_updates_' ):
-                self._inner_updates_ += layer.inner_updates_
-                
-        self._gt_nodes_ = None      # will be set in fit()
-            
-        # sum regs by traveling all layers
-        self._reg_value_ = 0.
-        for layer in self._layer_list_:
-            self._reg_value_ += layer.reg_value_
-            
-        # tr_phase_node
-        self._tr_phase_node_ = K.common_tr_phase_node
-            
-        # time
-        self._tr_time_ = 0.
         self._epoch_ = 0
-        self._iter_ = 0
+        self._iter_= 0
+        self._tr_time_ = 0.
+        
+        self._tr_phase_node_ = K.common_tr_phase_node
+        self._effective_layers_ = self.get_effective_layers(self._in_layers_, self._out_layers_)
+        
+        self._check_duplicate_name(self._effective_layers_)
+        self._trainable_table_ = self._init_trainable_table(self._effective_layers_)
+        
+        # self._refresh_model()
+
+    # ------------------ Private methods ------------------
     
+    def _depth_first_search(self, layer, visited, type):
+        """
+        Depth first search (DFS) of a given layer. 
+        
+        Args:
+          layer: layer. From this layer to start depth first search (DFS). 
+          visited: list of layer. Layers already visited and to be skipped in DFS. 
+          type: 'forward' | 'backward'. 'forward' is doing BFS by layer.nexts_, 
+              'backward' is doing BFS by layer.prevs_
+              
+        Return:
+          list of layers. Add layers by DFS to existing visited layers. 
+        """
+        visited.append(layer)
+        son_layers = self._get_son_layers(layer, type)
+        for son_layer in son_layers:
+            if son_layer not in visited:
+                self._depth_first_search(son_layer, visited, type)
+        return visited
+        
+    def _get_son_layers(self, layer, type):
+        """Get son layers of a layer, type can be 'forward' | 'backward'
+        """
+        if type=='forward':
+            return layer.nexts_
+        elif type=='backward':
+            return layer.prevs_
+        else:
+            raise Exception("type should be 'forward' | 'backward'!")
+
+    def _check_duplicate_name(self, effective_layers):
+        """Check if duplicated name in effective layers. 
+        """
+        from collections import Counter
+        names = [layer.name_ for layer in effective_layers]
+        duplicated_names = [name for name,v in Counter(names).items() if v>1]
+        if duplicated_names:
+            err_str = "Layers must have unique names! Names "
+            for name in duplicated_names: err_str = err_str + "'" + name + "' "
+            err_str += "are not unique!" 
+            raise Exception(err_str)
+
+    def _init_trainable_table(self, effective_layers):
+        """Trainable_table has [index, layer, bool]. 
+        """
+        trainable_table = []
+        for layer in effective_layers:
+            index = len(trainable_table)
+            trainable_table.append([index, layer, True])
+        return trainable_table
+        
+    def _get_all_params(self, effective_layers, trainable_table):
+        """Return list of all trainable layer's params. 
+        """
+        params = []
+        for row in trainable_table:
+            [index, layer, trainable] = row
+            if trainable is True:
+                if hasattr(layer, 'params_'):
+                    params += layer.params_
+        return params
+        
+    def _get_all_inner_updates(self, effective_layers, trainable_table):
+        """Return list of all trainable layer's inner_updates. 
+        """
+        inner_updates = []
+        for row in trainable_table:
+            [index, layer, trainable] = row
+            if trainable is True:
+                if hasattr(layer, 'inner_updates_'):
+                    inner_updates += layer.inner_updates_
+        return inner_updates
+        
+    def _get_all_layer_reg_value(self, effective_layers, trainable_table):
+        """Return list of all trainable layer's reg_value. 
+        """
+        reg_value = 0.
+        for row in trainable_table:
+            [index, layer, trainable] = row
+            if trainable is True:
+                if hasattr(layer, 'reg_value_'):
+                    reg_value += layer.reg_value_
+        return reg_value
+        
+    def _find_tt_row_by_name(self, layer_name, trainable_table):
+        for row in trainable_table:
+            if row[1].name_ == layer_name:
+                return row
+        return None
+        
+    def _show_memory_usage(self, effective_layers, batch_size):
+        n_data_ary = []
+        for layer in effective_layers:
+            n_data_ary.append(np.prod(layer.out_shape_[1:]) * batch_size)
+        
+        n_data_total = np.sum(n_data_ary)
+        n_byte_total = n_data_total * 4   # float32 
+        n_byte_total *= 2                 # forward & backward
+        f = "{0:<30} {1:<10}"
+        print f.format("total memory usage:", str(n_byte_total/1e6)+"Mb")
+        
+    def _print_progress(self, epoch, batch_num, curr_batch_num):
+        sys.stdout.write("%d-th epoch %d%% \r" % (epoch, float(curr_batch_num)/float(batch_num)*100))
+        sys.stdout.flush()
     
+    def _print_progress_loss(self, epoch, batch_num, curr_batch_num, loss):
+        sys.stdout.write("%d-th epoch %d%%   %s %f \r" % (epoch, float(curr_batch_num)/float(batch_num)*100, 'tr_loss:', loss))
+        sys.stdout.flush()
         
-    @property
-    def in_layers_( self ):
-        return self._in_layers_
+    def _n_layer_params(self, layer):
+        n_params = 0
+        for param in layer.params_:
+            n_params += np.prod(K.get_value(param).shape)
+        return n_params
         
+    def _n_model_trainable_params(self):
+        n_params = 0
+        for row in self._trainable_table_:
+            [index, layer, bool] = row
+            if bool is True:
+                n_params += self._n_layer_params(layer)
+        return n_params
+        
+    def set_gt_nodes(self, target_dims):
+        """Set gt_nodes for computing loss for training. 
+        """
+        self._gt_nodes_ = [K.placeholder(y_dim) for y_dim in target_dims]
+        
+    def _set_epoch(self, epoch):
+        self._epoch_ = epoch
+        
+    def _set_iter(self, iter):
+        self._iter_ = iter
     
-    @property
-    def in_nodes_( self ):
-        return self._in_nodes_
-        
-    @property
-    def out_nodes_( self ):
-        return self._out_nodes_
-        
-    @property
-    def any_nodes_( self ):
-        return self._any_nodes_
+    # ------------------ Public methods ------------------
     
-    # gt nodes will be set using fit()
-    @property
-    def gt_nodes_( self ):
-        return self._gt_nodes_
-    
-    @property
-    def epoch_( self ):
-        return self._epoch_
+    def summary(self, verbose=1):
+        """Print model information. 
+        """
+        def _get_params_str(params):
+            string = ""
+            for p in params:
+                string = string + p.name.split('_')[-1] + ", "
+            return string[:-2]
         
-    @property
-    def iter_( self ):
-        return self._iter_
+        if verbose==1:
+            print '---------- summary -----------'
+            f = "{0:<20} {1:<10} {2:<25} {3:<20} {4:<15} {5:<20} {6:<20}"
+            print f.format('layer_name', 'layer_id', 'prev layers', 'trainable_params', 'n_params', 'out_shape', 'trainable')
+            for row in self.trainable_table_:
+                [index, layer, trainable] = row
+                prev_layer_names = [prev_layer.name_ for prev_layer in layer.prevs_]
+                n_params = self._n_layer_params(layer)
+                print f.format(layer.name_, layer.id_, prev_layer_names, 
+                            _get_params_str(layer.params_), n_params, str(layer.out_shape_), trainable)
+            print "\nTotal trainable params:", self._n_model_trainable_params(), "\n"
         
-    @property
-    def tr_time_( self ):
-        return self._tr_time_
+        elif verbose==2:
+            print '---------- summary -----------'
+            f = "{0:<10} {1:<20} {2:<10} {3:<25} {4:<20} {5:<15} {6:<20} {7:<20}"
+            print f.format('tb_index', 'layer_name', 'layer_id', 'prev layers', 'trainable_params', 'n_params', 'out_shape', 'trainable')
+            for row in self.trainable_table_:
+                [index, layer, trainable] = row
+                prev_layer_names = [prev_layer.name_ for prev_layer in layer.prevs_]
+                n_params = self._n_layer_params(layer)
+                print f.format(index, layer.name_, layer.id_, prev_layer_names, 
+                            _get_params_str(layer.params_), n_params, str(layer.out_shape_), trainable)
+            print "\nTotal trainable params:", self._n_model_trainable_params(), "\n"
         
-    @property
-    def tr_phase_node_( self ):
-        return self._tr_phase_node_
+    def get_effective_layers(self, in_layers, out_layers):
+        """Return intersection of forward_visited and backward_visited layers. 
+        """
+        # DFS of in_layers
+        forward_visited = []
+        for in_layer in in_layers:
+            forward_visited = self._depth_first_search(in_layer, forward_visited, type='forward')
+            
+        # DFS of out_layers
+        backward_visited = []
+        for out_layer in out_layers:
+            backward_visited = self._depth_first_search(out_layer, backward_visited, type='backward')
+            
+        # Intersection of forward_visited and backward_visited
+        effective_layers = [layer for layer in forward_visited if layer in backward_visited]
         
-    @property
-    def reg_value_( self ):
-        return self._reg_value_
+        # Sort effective_layers by id
+        effective_layers = sorted(effective_layers, key=lambda e: e.id_, reverse=False)
         
-    # ---------- Public methods ----------
-    
-    # set gt_nodes
-    def set_gt_nodes( self, y ):
-        y = to_list( y )
-        y = [ K.format_data(e) for e in y ]
-        self._gt_nodes_ = [ K.placeholder( e.ndim ) for e in y ]
-    
-    def summary( self ):
-        print '---------- summary -----------'
-        f = "{0:<20} {1:<20} {2:<20}"
-        print f.format( 'layer_name', 'out_shape', 'n_params' )
-        for layer in self._layer_list_:
-            n_params = self._num_of_params( layer )
-            print f.format( layer.name_, str(layer.out_shape_), str(n_params) )
-        print 
+        return effective_layers
+   
+    def set_layers_trainability(self, layer_names, bool):
+        """Set list of layers' trainablility. 
+        """
+        layer_names = to_list(layer_names)
+
+        for layer_name in layer_names:
+            row = self._find_tt_row_by_name(layer_name, self._trainable_table_)
+            if row is None: 
+                raise Exception("Can not find layer_name!")
+            else: 
+                index = row[0]
+            self._trainable_table_[index][-1] = bool
         
-    # search and return layer from name
-    def find_layer( self, name ):
-        for layer in self._layer_list_:
+        # self._refresh_model()
+        
+    def set_trainability(self, bool):
+        """Set all the trainability of all layers in trainable_table. 
+        """
+        for row in self._trainable_table_:
+            row[-1] = bool
+            
+        # self._refresh_model()
+
+    def find_layer(self, name):
+        """Search and return a layer in the model by name. 
+        """
+        for layer in self._effective_layers_:
             if name==layer.name_:
                 return layer
         raise Exception("No layer named " + name + "! ")
-
-    def plot_connection( self ):
-        G = nx.DiGraph()
         
-        # add node
-        for id in self._id_list_:
-            G.add_node( id )
+    def add_models(self, mds):
+        """Add list of model to existing model, update in_layers, out_layers, any_layers and trainable_table. 
+        """
+        mds = to_list(mds)
         
-        # add connection
-        for layer in self._layer_list_:
-            for next in layer.nexts_:
-                G.add_edge( layer.id_, next.id_ )
+        new_in_layers = self.in_layers_
+        new_out_layers = self.out_layers_
+        new_any_layers = self.any_layers_
+        init_trainable_table = self.trainable_table_
+        for md in mds:
+            new_in_layers += md.in_layers_
+            new_out_layers += md.out_layers_
+            new_any_layers += md.any_layers_
+            init_trainable_table += md.trainable_table_
+        
+        self.__init__(new_in_layers, new_out_layers, new_any_layers)
+        
+        # New trainable_table is inherited from old concatenated trainable_table
+        for row1 in init_trainable_table:
+            row2 = self._find_tt_row_by_name(row1[1].name_, self._trainable_table_)
+            if row2:
+                index = row2[0]
+                self._trainable_table_[index][-1] = row1[-1]
                 
-        # pos & labels
-        pos = nx.spring_layout(G)
-        labels = {}
-        for layer in self._layer_list_:
-            if hasattr( layer, '_act' ):
-                labels[layer.id_] = layer._name_
-            else:
-                labels[layer.id_] = layer._name_
+        # self._refresh_model()
 
-        # plot
-        nx.draw_networkx_nodes( G , pos, node_size=800, node_color='r', node_shape='o' )
-        nx.draw_networkx_labels( G, pos, labels=labels )
-        nx.draw_networkx_edges( G, pos )
-        try:
-            plt.show()
-        except:
-            print "Warning! You do not have graphic interface to plot connection! "
-
-    # ---------- Private methods ----------
-
-    # set epoch
-    def _set_epoch( self, val ):
-        self._epoch_ = val
+    def joint_models(self, tail_layer_name, head_layer_name):
+        """Joint tail node and head node, update out_layers and in_layers. 
+        """
+        tail_layer = self.find_layer(tail_layer_name)
+        head_layer = self.find_layer(head_layer_name)
         
-    # set iter
-    def _set_iter( self, val ):
-        self._iter_ = val
-    
-    # get params by traveling all layers
-    def _get_all_params( self ):
-        params = []
-        for layer in self._layer_list_:
-            params += layer.params_
-        return params
-
-    # get number of params in a layer
-    def _num_of_params( self, layer ):
-        n_params = 0
-        for param in layer.params_:
-            n_params += np.prod( K.get_value( param ).shape )
-        return n_params
+        # Joint
+        tail_layer.add_next(head_layer)
+        head_layer.set_previous(tail_layer)
         
-    # print memory usage
-    def _show_memory_usage( self, layer_list, batch_size ):
-        n_data_ary = []
-        for layer in layer_list:
-            n_data_ary.append( np.prod( layer.out_shape_[1:] ) * batch_size )
+        # After joint, the tail & head layer will be removed from out_layers & in_layers
+        def _remove_layer_from_list(name, layer_list):
+            for layer in layer_list:
+                if name==layer.name_:
+                    layer_list.remove(layer)
+                    return layer_list
         
-        n_data_total = np.sum( n_data_ary )
-        n_byte_total = n_data_total * 4   # float32 
-        n_byte_total *= 2                 # forward & backward
-        print "Total memory usage:", n_byte_total / 1e6, "MB"
+        self._in_layers_ = _remove_layer_from_list(head_layer.name_, self._in_layers_)
+        self._out_layers_ = _remove_layer_from_list(tail_layer.name_, self._out_layers_)
         
-    # flush progress on screen
-    def _print_progress( self, epoch, batch_num, curr_batch_num ):
-        sys.stdout.write("%d-th epoch %d%% \r" % ( epoch, float(curr_batch_num)/float(batch_num)*100 ) )
-        sys.stdout.flush()
-    
-    # flush progress and train loss on screen
-    def _print_progress_loss( self, epoch, batch_num, curr_batch_num, loss ):
-        sys.stdout.write("%d-th epoch %d%%   %s %f \r" % ( epoch, float(curr_batch_num)/float(batch_num)*100, 'tr_loss:', loss ) )
-        sys.stdout.flush()
+        # self._refresh_model()
         
-    # flush iter progress and the train loss on screen
-    def _print_iter_progress( self, epoch, iter, batch_num ):
-        sys.stdout.write( "total iter: %d, epoch: %d, iter: %d \r" % (iter, epoch, iter%batch_num) )
-        sys.stdout.flush()
+    def compile(self):
+        """Compile the computation graph, update params, reg_value, inner_updates. 
+        """
+        for layer in self._effective_layers_:
+            layer.compile()
+            
+    def get_optimization_func(self, target_dims, loss_func, optimizer, clip):
+        """Compile and return optimization function. 
         
-    # check if the dim of output is correct
-    def _check_data( self, y, loss_func ):
-        if loss_func in ['categorical_crossentropy', 'binary_crossentropy', 'kl_divergence']:
-            for e in y:
-                assert e.ndim!=1, "your y.ndim is 1, try use sparse_to_categorical(y)"
-                
-    # ------------------------------------
-
-'''
-Supervised Model
-'''
-class Model( Base ):
-    def __init__( self, in_layers, out_layers, any_layers=[] ):
-        super( Model, self ).__init__( in_layers )
-
-        # out layers
-        out_layers = to_list( out_layers )
-        self._out_layers_ = out_layers
-        self._out_nodes_ = [ layer.output_ for layer in self._out_layers_ ]
+        Args:
+          target_dims: list of integars. targets' dimension. e.g. target_dims=[2]
+          loss_func: string | function. 
+          optimizer: object. 
+          clip: None | real value. 
+          
+        Return:
+          optimization function. 
+        """
+        # set gt nodes
+        self.set_gt_nodes(target_dims)
         
-        # inter layers
-        any_layers = to_list( any_layers )
-        self._any_layers_ = any_layers
-        self._any_nodes_ = [ layer.output_ for layer in self._any_layers_ ]
-
-    ###
-    # compile optimization function
-    def get_optimization_func( self, loss_func, optimizer, clip ):
-        # default objective
+        # Default loss
         if type(loss_func) is str:
-            assert len(self.out_nodes_)==len(self.gt_nodes_), "If you are using default objectives, " \
-                                            + "out_node of out_layers must match ground truth!"
-            loss_node = sum( [ obj.get( loss_func )( pred_node, gt_node ) 
-                            for pred_node, gt_node in zip( self.out_nodes_, self.gt_nodes_ ) ] )
-        # user defined objective
+            assert len(self.out_nodes_)==1, "If the number of out_layers > 1, you need define your own loss_func!"
+            loss_node = obj.get(loss_func)(self.out_nodes_[0], self.gt_nodes_[0])
+        # User defined loss
         else:
-            loss_node = loss_func( self )
+            loss_node = loss_func(self)
          
-        # gradient
-        params = self._get_all_params()
-        gparams = K.grad( loss_node + self._reg_value_, params )
+        # Compute gradient
+        gparams = K.grad(loss_node + self.reg_value_, self.params_)
         
-        # todo clip gradient
+        # Clip gradient
         if clip is not None:
-            gparams = [ K.clip( gparam, -clip, clip ) for gparam in gparams ]
+            gparams = [K.clip(gparam, -clip, clip) for gparam in gparams]
         
-        # gradient based opt
-        param_updates = optimizer.get_updates( params, gparams )
+        # Gradient based optimization
+        param_updates = optimizer.get_updates(self.params_, gparams)
         
-        # get all updates
-        updates = param_updates + self._inner_updates_
+        # Get all updates
+        updates = param_updates + self.inner_updates_
         
-        # compile model
-        input_nodes = self.in_nodes_ + self.gt_nodes_
-        f = K.function_no_given( input_nodes, self._tr_phase_node_, [ loss_node ], updates )
+        # Compile model
+        inputs = self.in_nodes_ + self.gt_nodes_ + [K.common_tr_phase_node]
+        outputs = [loss_node]
+        f = K.function_no_given(inputs, outputs, updates)
         return f
         
-    ###
-    # prepare data
-    def preprocess_data( self, x, y, shuffle ):
-        x = to_list( x )
-        y = to_list( y )
+    def fit(self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', 
+             optimizer=SGD(lr=0.01, momentum=0.9), clip=None, callbacks=[], shuffle=True, verbose=1):
+        """Fit data and train model. The data is reshuffled after every epoch. 
         
-        # format
-        x = [ K.format_data(e) for e in x ]
-        y = [ K.format_data(e) for e in y ]
-    
-        return x, y
+        Args:
+          x: ndarray | list of numpy ndarray. 
+          y: ndarray | list of numpy ndarray. 
+          batch_size: integar. 
+          n_epoch: integar. Number of training epochs. 
+          loss_func: str | function. 
+          optimizer: optimization object. 
+          clip: real value. 
+          callbacks: list of Callback object. 
+          shuffle: bool. 
+          verbose: 0 | 1 | 2
+          
+        Returns: None. (All trained models, results should be saved using callbacks.)
+        """
+        x = to_list(x)
+        y = to_list(y)
         
+        # Format data
+        x = [K.format_data(e) for e in x]
+        y = [K.format_data(e) for e in y]
         
-    ###
-    # execute optimization function
-    def do_optimization_func_epoch_wise( self, f, x, y, batch_size, n_epochs, shuffle, callbacks, verbose ):
-        # callbacks' type must be 'epoch'
-        self._check_callback_type( callbacks, 'epoch' )
+        # Train memory usage
+        print "Training", 
+        self._show_memory_usage(self._effective_layers_, batch_size)
         
-        # memory usage
-        print "Train", 
-        self._show_memory_usage( self._layer_list_, batch_size )
+        # Compile optimization function
+        timer = Timer()
+        target_dims = [e.ndim for e in y]
+        f_optimize = self.get_optimization_func(target_dims, loss_func, optimizer, clip)
+        timer.show("Compiling f_optimize time:")
         
-        # compile for callback
+        # Compile for callback
+        timer = Timer()
         if callbacks is not None:
-            callbacks = to_list( callbacks )
+            callbacks = to_list(callbacks)
             for callback in callbacks:
-                callback.compile( self ) 
-
-        # train
-        N = len( x[0] )
-        batch_num = self._get_batch_num( N, batch_size )
+                callback.compile(self) 
+        timer.show("Compiling callbacks time:")
+        
+        # Train
+        N = len(x[0])
+        batch_num = int(np.ceil(float(N) / batch_size))
         max_epoch = n_epochs + self.epoch_
         
-        # callback
+        # Callback
         print '\n', self.epoch_, 'th epoch:'
         for callback in callbacks:
-            if ( self.epoch_ % callback.call_freq_ == 0 ):
+            if (self.epoch_ % callback.call_freq_ == 0):
                 callback.call()
         
         while self.epoch_ < max_epoch:
-            # shuffle data
+            # Shuffle data
             if shuffle:
-                x, y = supports.shuffle( x, y )
+                x, y = supports.shuffle(x, y)
 
-            # train
+            # Train
             t1 = time.time()
             loss_list = []
             for i2 in xrange(batch_num):
-                batch_x = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in x ]
-                batch_y = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in y ]
-                in_list = batch_x + batch_y + [1.]
-                loss = f( *in_list )[0]                     # training phase 
-                loss_list.append( loss )
+                batch_x = [e[i2*batch_size : min((i2+1)*batch_size, N)] for e in x]
+                batch_y = [e[i2*batch_size : min((i2+1)*batch_size, N)] for e in y]
+                in_list = batch_x + batch_y + [1.]      # training phase
+                loss = f_optimize(*in_list)[0]                      
+                loss_list.append(loss)
                 self._iter_ += 1
-                if verbose==1: self._print_progress( self.epoch_, batch_num, i2 )
-                if verbose==2: self._print_progress_loss( self.epoch_, batch_num, i2, loss )
+                if verbose==1: self._print_progress(self.epoch_, batch_num, i2)
+                if verbose==2: self._print_progress_loss(self.epoch_, batch_num, i2, loss)
                 
             t2 = time.time()
             self._tr_time_ += (t2 - t1)            
             if verbose!=0: print '\n', '    tr_time: ', "%.2f" % (t2-t1), 's'          # print an empty line
-            self._set_epoch( self.epoch_ + 1 )
+            self._epoch_ += 1
             
-            # callback
+            # Callback
             for callback in callbacks:
-                if ( self.epoch_ % callback.call_freq_ == 0 ):
+                if (self.epoch_ % callback.call_freq_ == 0):
                     callback.call()
-                    
         
-    # execute optimization function
-    def do_optimization_func_iter_wise( self, f, x, y, batch_size, n_iters, shuffle, callbacks, verbose ):
-        # shuffle data
-        if shuffle:
-            x, y = supports.shuffle( x, y )
+    def train_on_batch(self, func, x, y):
+        """Train model on batch data. 
         
-        # callbacks' type must be 'epoch'
-        self._check_callback_type( callbacks, 'iter' )
+        Args:
+          func: function. 
+          x: ndarray | list of ndarray. 
+          y: ndarray | list of ndarray. 
+        """
+        x = to_list(x)
+        y = to_list(y)
         
-        # memory usage
-        print "Train", 
-        self._show_memory_usage( self._layer_list_, batch_size )
+        # Format data
+        x = [K.format_data(e) for e in x]
+        y = [K.format_data(e) for e in y]
         
-        # compile for callback
-        if callbacks is not None:
-            callbacks = to_list( callbacks )
-            for callback in callbacks:
-                callback.compile( self ) 
-
-        # train
-        N = len( x[0] )
-        batch_num = self._get_batch_num( N, batch_size )
-        print "batch_num:", batch_num
-        print 'iter:', self.iter_, 'epoch:', self.epoch_, '\n'
+        in_list = x + y + [1.]      # training phase
+        loss = func(*in_list)[0]   
         
-        # callback
-        for callback in callbacks:
-            if ( self.iter_ % callback.call_freq_ == 0 ):
-                callback.call()
-                
-          
-        loss_list = []      
-        max_iter = self.iter_ + n_iters
-        t1 = time.time() 
-        
-        while self.iter_ < max_iter:
-            i2 = self.iter_ % batch_num
-            batch_x = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in x ]
-            batch_y = [ e[i2*batch_size : min( (i2+1)*batch_size, N ) ] for e in y ]
-            in_list = batch_x + batch_y + [1.]
-            loss = f( *in_list )[0]                     # training phase 
-            loss_list.append( loss )
-            self._set_epoch( self.iter_ / batch_num )
-            self._set_iter( self.iter_ + 1 )
-            if verbose==1: self._print_iter_progress( self.epoch_, self.iter_, batch_num )
-            
-            # callback
-            for callback in callbacks:
-                if ( self.iter_ % callback.call_freq_ == 0 ):
-                    #print '\n'
-                    callback.call()
-                    
-        t2 = time.time()
-        self._tr_time_ += (t2 - t1)            
-        if verbose!=0: print '    tr_time: ', "%.2f" % (t2-t1), 's \n'          # print an empty line
-    
-        
-    ###
-    # fit data and train the neural network
-    def fit( self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], shuffle=True, verbose=1 ):
-        # set gt_nodes
-        self.set_gt_nodes( y )
-        
-        # compile optimization function
-        f = self.get_optimization_func( loss_func, optimizer, clip )
-        
-        # prepare data
-        _x, _y = self.preprocess_data( x, y, shuffle )
-        
-        # execute optimization function
-        self.do_optimization_func_epoch_wise( f=f, x=_x, y=_y, batch_size=batch_size, n_epochs=n_epochs, callbacks=callbacks, shuffle=shuffle, verbose=verbose )
-       
-        
-    def fit_iter( self, x, y, batch_size=100, n_iters=10, loss_func='categorical_crossentropy', optimizer=SGD( lr=0.01, rho=0.9 ), clip=None, callbacks=[], shuffle=True, verbose=1 ):
-        # set gt_nodes
-        self.set_gt_nodes( y )
-        
-        # compile optimization function
-        f = self.get_optimization_func( loss_func, optimizer, clip )
-        
-        # prepare data
-        _x, _y = self.preprocess_data( x, y, shuffle )
-        
-        # execute optimization function
-        self.do_optimization_func_iter_wise( f=f, x=_x, y=_y, batch_size=batch_size, n_iters=n_iters, shuffle=shuffle, callbacks=callbacks, verbose=verbose )
-       
-       
-    def train_on_batch( self, batch_x, batch_y, func ):
-        batch_x, batch_y = self.preprocess_data( batch_x, batch_y, shuffle=None )
-        
-        in_list = batch_x + batch_y + [1.]
-        loss = func( *in_list )[0]                     # training phase 
-        self._set_iter( self.iter_ + 1 )
-        
+        self._set_iter(self.iter_ + 1)                   
         return loss
-         
         
-
-    ###
-    # predict output using current model
-    def predict( self, x, batch_size=100 ):
-        # format data
-        x = to_list( x )
-        x = [ K.format_data(e) for e in x ]
+    def predict(self, x, batch_size=100):
+        """Predict output using current model. 
         
-        # compile predict model
-        if not hasattr( self, '_f_predict' ):
-            self._f_predict = K.function_no_given( self._in_nodes_, self._tr_phase_node_, self._out_nodes_ )
+        Args:
+          x: ndarray | list of ndarray. 
+          batch_size: integar. 
+          
+        Returns:
+          ndarray | list of ndarray. 
+        """
+        # Compile predict model just once
+        if self._f_predict is None:
+            inputs = self.in_nodes_ + [self.tr_phase_node_]
+            timer = Timer()
+            self._f_predict = K.function_no_given(inputs, self.out_nodes_)
+            timer.show("Compiling f_predict time:")
         
-        # do predict
-        # put all data in GPU
+        return self.run_function(self._f_predict, x, batch_size)
+        
+    def get_observe_forward_func(self, observe_nodes):
+        observe_nodes = to_list(observe_nodes)
+        inputs = self.in_nodes_ + [self.tr_phase_node_]
+        timer = Timer()
+        f_observe_forward = K.function_no_given(inputs, observe_nodes)
+        timer.show("Compiling f_observe_forward time:")
+        return f_observe_forward
+        
+    def get_observe_backward_func(self, observe_nodes):
+        if self.gt_nodes_ is None:
+            raise Exception("You must call set_gt_nodes method before call observe_backward method!")
+            
+        observe_nodes = to_list(observe_nodes)
+        inputs = self.in_nodes_ + self.gt_nodes_ + [self.tr_phase_node_]
+        timer = Timer()
+        f_observe_backward = K.function_no_given(inputs, observe_nodes)
+        timer.show("Compiling f_observe_backward time:")
+        return f_observe_backward
+        
+    def run_function(self, func, z, batch_size):
+        """Return output of a function given value. 
+        
+        Args:
+        func: function
+        z: ndarray | list of ndarray. Can be [inputs] for computing forward, 
+            or [inputs]+[outputs] for computing backward
+            
+        Returns:
+        list of ndarray
+        """
+        # Format data
+        z = to_list(z)
+        z = [K.format_data(e) for e in z]
+        
+        # pickle.dump( z[0], open( '/user/HS229/qk00006/my_code2015.5-/python/Hat_compare_keras/compare_hat_x_1.p', 'wb' ) )
+        # pause
+        
+        # Calculating all in same time
         if batch_size is None:
-            in_list = x + [0.]
-            y_out = self._f_predict( *in_list )
-        # put batch data in GPU
+            in_list = z + [0.]
+            y_out = func(*in_list)
+        # Calculating in batch
         else:
-            N = len(x[0])
-            batch_num = int( np.ceil( float(N) / batch_size ) )
-            n_out_nodes = len( self._out_nodes_ )
-            y_out = [ [] for e in self._out_nodes_ ]
-            for i1 in xrange( batch_num ):
-                in_list = [ e[i1*batch_size : min( (i1+1)*batch_size, N ) ] for e in x ] + [0.]
-                batch_y_out = self._f_predict( *in_list )
-                for j1 in xrange(n_out_nodes):
-                    y_out[j1].append( batch_y_out[j1] )
+            N = len(z[0])
+            batch_num = int(np.ceil(float(N) / batch_size))
+            n_out_nodes = len(self.out_nodes_)
+            y_out = []      # list of batch_y_out
+            for i1 in xrange(batch_num):
+                in_list = [e[i1*batch_size : min((i1+1)*batch_size, N)] for e in z] + [0.]
+                batch_y_out = func(*in_list)    # list of ndarray
+                y_out.append(batch_y_out)
+
+            def _reform(y_out):
+                outs = []
+                for i1 in xrange(len(y_out[0])):
+                    tmp_list = []
+                    for j1 in xrange(len(y_out)):
+                        tmp_list.append(y_out[j1][i1])
+                    out = np.concatenate(tmp_list, axis=0)
+                    outs.append(out)
+                return outs
                     
-            # get y_out
-            y_out = [ np.concatenate(e, axis=0) for e in y_out ]
+            y_out = _reform(y_out)
         
         if len(y_out)==1:
             return y_out[0]
         else:
             return y_out
-        
-    
+            
     @property
     def info_( self ):
         dict = { 'epoch': self.epoch_, 
@@ -478,36 +590,89 @@ class Model( Base ):
         md._set_epoch( info['epoch'] )
         md._set_iter( info['iter'] )
         return md
-        
-        
-    # ------------ Private methods -------------
     
-    # get batch size number
-    def _get_batch_num( self, N, batch_size ):
-        batch_num = int( np.ceil( float(N) / batch_size ) )
-        return batch_num
+    # ------------------ Public attributes ------------------
+    
+    @property
+    def params_(self):
+        return self._get_all_params(self._effective_layers_, self._trainable_table_)
         
-    def _check_callback_type( self, callbacks, cb_type ):
-        # compile for callback
-        if callbacks is not None:
-            callbacks = to_list( callbacks )
-            for cb in callbacks:
-                assert cb.type_==cb_type, "Error! Callback type should be '" + cb_type + "'!"
-
+    @property
+    def reg_value_(self):
+        return self._get_all_layer_reg_value(self._effective_layers_, self._trainable_table_)
         
-class Sequential( Model ):
-    def __init__( self ):
+    @property
+    def inner_updates_(self):
+        return self._get_all_inner_updates(self._effective_layers_, self._trainable_table_)
+        
+    @property
+    def in_layers_(self):
+        return self._in_layers_
+        
+    @property
+    def out_layers_(self):
+        return self._out_layers_
+        
+    @property
+    def any_layers_(self):
+        return self._any_layers_
+        
+    @property
+    def in_nodes_(self):
+        in_nodes = []
+        for layer in self._in_layers_:
+            in_nodes += layer.inputs_
+        return in_nodes
+        
+    @property
+    def out_nodes_(self):
+        return [layer.output_ for layer in self.out_layers_]
+        
+    @property
+    def any_nodes_(self):
+        return [layer.output_ for layer in self.any_layers_]
+        
+    @property
+    def gt_nodes_(self):
+        return self._gt_nodes_
+        
+    @property
+    def tr_phase_node_(self):
+        return self._tr_phase_node_
+        
+    @property
+    def effective_layers_(self):
+        return self._effective_layers_
+        
+    @property
+    def trainable_table_(self):
+        return self._trainable_table_
+        
+    @property
+    def epoch_(self):
+        return self._epoch_
+        
+    @property
+    def iter_(self):
+        return self._iter_
+        
+    @property
+    def tr_time_(self):
+        return self._tr_time_
+        
+        
+        
+class Sequential(Model):
+    def __init__(self):
         self._layer_seq_ = []
         
-    def add( self, layer ):
-        self._layer_seq_.append( layer )
-        if len( self._layer_seq_ ) > 1:
-            self._layer_seq_[-1].__call__( self._layer_seq_[-2] )
+    def add(self, layer):
+        self._layer_seq_.append(layer)
+        if len(self._layer_seq_) > 1:
+            self._layer_seq_[-1].__call__(self._layer_seq_[-2])
 
-    def combine( self ):
-        # regenerate model when add a new layer
-        md = Model( [ self._layer_seq_[0] ], [ self._layer_seq_[-1] ] )
+    def compile(self):
+        md = Model([self._layer_seq_[0]], [self._layer_seq_[-1]])
+        md.compile()
         return md
     
-class Pretrain():
-    pass
