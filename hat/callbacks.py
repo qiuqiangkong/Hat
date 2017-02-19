@@ -1,11 +1,9 @@
-'''
-SUMMARY:  Callbacks, to validate, save model every several epochs
+"""
+SUMMARY:  Callbacks can be executed after each training epoch. 
 AUTHOR:   Qiuqiang Kong
 Created:  2016.05.14
-Modified: 2016.07.25 Modify evalute() to batch version
-          2016.07.29 Fix bug in _evaluate
 --------------------------------------
-'''
+"""
 import backend as K
 import objectives as obj
 import serializations
@@ -21,10 +19,10 @@ from inspect import isfunction
 
 
 
-'''
-Callback is an abstract class
-'''
 class Callback( object ):
+    """
+    Callback is an abstract class
+    """
     __metaclass__ = ABCMeta
     
     def __init__( self, call_freq, type ):
@@ -48,10 +46,11 @@ class Callback( object ):
     def type_( self ):
         return self._type_
         
-'''
-Templete for creating a new Callback class
-'''
+
 class YourCallback( Callback ):
+    """
+    Templete for users to create a new Callback class
+    """
     def __init__( self, call_freq=3, type='epoch', # other params
                 ):
         super( YourCallback, self ).__init__( call_freq, type )
@@ -67,10 +66,46 @@ class YourCallback( Callback ):
         # your code here
         
         
-'''
+class SaveModel( Callback ):
+    """
+    Save Model every n-epoches
+    """
+    def __init__( self, dump_fd, call_freq=3, type='epoch' ):
+        super( SaveModel, self ).__init__( call_freq, type )
+        self._dump_fd_ = dump_fd
+        
+    def compile( self, md ):
+        self._md_ = md
+        
+    def call( self ):
+        if self.type_ == 'epoch':
+            dump_path = self._dump_fd_ + '/md' + str(self._md_.epoch_) + '_epochs.p'
+        elif self.type_ == 'iter':
+            dump_path = self._dump_fd_ + '/md' + str(self._md_.iter_) + '_iters.p'
+            
+        serializations.save( self._md_, dump_path )
+        print "    Save to " + dump_path + " successfully!\n"
+        
+        
+"""
 metric_types can be list or string
-'''
+"""
 class Validation( Callback ):
+    """Validate existing model using train, validation and test data. 
+    
+    Args:
+      tr_x: ndarray | list of ndarray | None
+      tr_y: ndarray | list of ndarray | None
+      va_x: ndarray | list of ndarray | None
+      va_y: ndarray | list of ndarray | None
+      va_x: ndarray | list of ndarray | None
+      va_y: ndarray | list of ndarray | None
+      batch_size: integar
+      call_freq: integar. Validation is called every #call_freq epoches or iters. 
+      metrics: string | function. 
+      dump_path: string | None
+      type: 'epoch' | 'iter'
+    """
     def __init__( self, tr_x=None, tr_y=None, va_x=None, va_y=None, te_x=None, te_y=None, batch_size=100,
                   call_freq=3, metrics=['categorical_error'], dump_path='validation.p', type='epoch', verbose=1):
         # init values
@@ -115,17 +150,17 @@ class Validation( Callback ):
         if ( x is not None ) and ( y is not None ):
             return True
         
-    '''
-    Here destroy md's closure property here for convenience. Do not use any private attributes and set method of md. 
-    '''
+    """
+    Here destroy md's closure property for convenience. Do not do any changes to md. 
+    """
     def compile( self, md ):
-        input_nodes = md.in_nodes_
-        self._f_pred = K.function_no_given( input_nodes, md.tr_phase_node_, md.out_nodes_ )
+        inputs = md.in_nodes_ + [md.tr_phase_node_]
+        self._f_pred = K.function_no_given( inputs, md.out_nodes_ )
         self._md_ = md
         
         # memory usage
         print "Callback", 
-        self._md_._show_memory_usage( self._md_._layer_list_, self._batch_size_ )
+        self._md_._show_memory_usage( self._md_.effective_layers_, self._batch_size_ )
         
  
     def call( self ):
@@ -142,10 +177,6 @@ class Validation( Callback ):
         print
         
     def _evaluate( self, x, y, eval_type ):
-        
-        # init gt_nodes
-        #gt_nodes = [ K.placeholder( e.ndim ) for e in y ]
-        
         # get metric losses node
         loss_nodes = []
         for metric in self._metrics_:
@@ -157,9 +188,7 @@ class Validation( Callback ):
                                 for pred_node, gt_node in zip( self._md_.out_nodes_, self._md_.gt_nodes_ ) ] )
             # if user define their objective function
             elif isfunction( metric ):
-                #loss_node = metric( self._md_.out_nodes_, self._md_.any_nodes_, gt_nodes )
                 loss_node = metric( self._md_ )
-            # if node
             else:
                 loss_node = metric
                 
@@ -168,8 +197,8 @@ class Validation( Callback ):
         # compile evaluation function
         if not hasattr( self, '_f_evaluate' ):
             print 'compiling evaluation function ..'
-            input_nodes = self._md_.in_nodes_ + self._md_.gt_nodes_
-            self._f_evaluate = K.function_no_given( input_nodes, self._md_.tr_phase_node_, loss_nodes )
+            inputs = self._md_.in_nodes_ + self._md_.gt_nodes_ + [self._md_.tr_phase_node_]
+            self._f_evaluate = K.function_no_given( inputs, loss_nodes )
             print 'compile finished. '
         
         # calculate metric values
@@ -181,7 +210,6 @@ class Validation( Callback ):
             N = len(x[0])
             batch_num = int( np.ceil( float(N) / self._batch_size_ ) )
             
-            # metric_container = [ [] for e in y ]
             metric_vals = np.zeros( len(self._metrics_) )
             
             # evaluate for each batch
@@ -201,7 +229,6 @@ class Validation( Callback ):
         # print results
         self._print_time_results( eval_type, self._metrics_, metric_vals, t2-t1 )
             
-                
     # print progress on screen
     def _print_progress( self, batch_num, curr_batch_num ):
         sys.stdout.write("testing: %d%%   \r" % ( float(curr_batch_num)/float(batch_num)*100 ) )
@@ -223,48 +250,4 @@ class Validation( Callback ):
         else:
             return 'reg_value'
         
-'''
-Save Model every n-epoches
-'''
-class SaveModel( Callback ):
-    def __init__( self, dump_fd, call_freq=3, type='epoch' ):
-        super( SaveModel, self ).__init__( call_freq, type )
-        self._dump_fd_ = dump_fd
         
-    def compile( self, md ):
-        self._md_ = md
-        
-    def call( self ):
-        if self.type_ == 'epoch':
-            dump_path = self._dump_fd_ + '/md' + str(self._md_.epoch_) + '_epochs.p'
-        elif self.type_ == 'iter':
-            dump_path = self._dump_fd_ + '/md' + str(self._md_.iter_) + '_iters.p'
-            
-        serializations.save( self._md_, dump_path )
-        print "    Save to " + dump_path + " successfully!\n"
-        
-            
-        
-class Debug( Callback ):
-    def __init__( self, call_freq, x,# other params
-                ):
-        self._call_freq = call_freq
-        x = K.format_data(x)
-        self._x = [x]
-        self._counter = 0
-        
-    def compile( self, md ):
-        self._md = md
-        self._f = K.function_no_given( md.in_nodes, md.tr_phase_node, md._layer_seq[3].output )
-        
-    def call( self ):
-        in_list = self._x + [0.]
-        
-        np.set_printoptions(threshold=np.nan, linewidth=1000, precision=2, suppress=True)
-        self._counter += 1
-        #print self._f( *in_list )
-        if self._counter==3:
-            print 'asdf'
-            print self._f(*in_list)
-            pause
-    
