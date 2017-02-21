@@ -10,7 +10,8 @@ def loss_func(out_nodes, inter_nodes, gt_nodes):
 
 
 ### objectives, all return are graphic representation
-_EPSILON = 1e-8     # if set smaller, some objective function will underflow
+# _EPSILON = 1e-8     # if set smaller, some objective function will underflow
+_EPSILON = 1e-7
 
 # categorical crossentropy
 def categorical_crossentropy(p_y_pred, y_gt):
