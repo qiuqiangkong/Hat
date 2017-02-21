@@ -5,7 +5,7 @@ Created:  2016.08.01
 Modified: -
 --------------------------------------
 '''
-from supports import BFT
+# from supports import BFT
 import cPickle
 from layers.core import *
 from layers.cnn import *
