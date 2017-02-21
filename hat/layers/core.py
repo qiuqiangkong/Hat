@@ -47,7 +47,7 @@ class Layer(object):
         self._params_ = None
         self._reg_value_ = None
         
-        # should be assigend in _get_output()
+        # should be assigend in compile()
         self._inputs_ = None
         self._output_ = None
     

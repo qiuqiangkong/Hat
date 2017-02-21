@@ -62,8 +62,6 @@ class Model(Base):
         
         self._check_duplicate_name(self._effective_layers_)
         self._trainable_table_ = self._init_trainable_table(self._effective_layers_)
-        
-        # self._refresh_model()
 
     # ------------------ Private methods ------------------
     
@@ -311,8 +309,6 @@ class Model(Base):
             if row2:
                 index = row2[0]
                 self._trainable_table_[index][-1] = row1[-1]
-                
-        # self._refresh_model()
 
     def joint_models(self, tail_layer_name, head_layer_name):
         """Joint tail node and head node, update out_layers and in_layers. 
