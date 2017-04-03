@@ -229,5 +229,19 @@ def function_given(batch_size, input_nodes, tr_phase_node, output_nodes, given_n
 def grad(cost, params):
     return theano.grad(cost, params)
     
-# scan, interface is same as theano
-scan = theano.scan
+# rnn, input.shape: (n_batch, n_time, n_in)
+def rnn(step_function, input, init_h, go_backwards):
+    ndim = input.ndim
+    axes = [1,0] + list(range(2, ndim))
+    swap_input = input.dimshuffle(axes)     # shape: (n_time, n_batch, n_in)
+    
+    outputs, _ = theano.scan(step_function, sequences=[swap_input], outputs_info=[init_h], go_backwards=go_backwards)
+    last_output = outputs[-1]
+    
+    axes = [1,0] + list(range(2, ndim))
+    outputs = outputs.dimshuffle(axes)
+    states = last_output
+    return last_output, outputs, states
+    
+# # scan, interface is same as theano
+# scan = theano.scan
