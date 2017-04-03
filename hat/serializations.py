@@ -77,7 +77,7 @@ def load(path):
     layer_list = []
     for atom in atom_list:
         LayerClass = globals().get(atom['info']['class_name'])
-        assert LayerClass is not None, "Try import '" + atom['info']['class_name'] + "' to serializations.py!"
+        assert LayerClass is not None, "Try serializations.register(" + atom['info']['class_name'] + ") before loading model!"
         
         if not atom['prev_ids']:
             layer = LayerClass.load_from_info(atom['info'])
