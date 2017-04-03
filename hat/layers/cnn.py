@@ -165,7 +165,7 @@ border_mode: 'valid' | 'full' | #a1 (pad with this #a1 then do valid conv)
 
 
 
-class Convolution2D(Layer):
+class Conv2D(Layer):
     """
     2D Convolutional Layer. 
     
@@ -189,7 +189,7 @@ class Convolution2D(Layer):
                   border_mode='valid', strides=(1,1), W_init=None, b_init=None, 
                   W_reg=None, b_reg=None, trainable_params=['W','b'], **kwargs):
         self._legal_params_ = ['W', 'b']
-        super(Convolution2D, self).__init__(**kwargs)
+        super(Conv2D, self).__init__(**kwargs)
         self._n_outfmaps_ = n_outfmaps
         self._n_row_ = n_row
         self._n_col_ = n_col
@@ -215,7 +215,7 @@ class Convolution2D(Layer):
         self._out_shape_ = self._get_out_shape(height, width, self._n_row_, self._n_col_, 
                                                 self._border_mode_, self._strides_)
   
-        # init params
+        # shared params
         filter_shape = (self._n_outfmaps_, n_infmaps, self._n_row_, self._n_col_)
         self._W_ = self._init_params(self._W_init_, self._init_type_, 
                                       filter_shape, name=str(self._name_)+'_W')
