@@ -27,6 +27,7 @@ class Layer(object):
     
     def __init__(self , **kwargs):
         # self._check_kwargs_(kwargs)
+        self._base_allowed_kwargs_ = ['id', 'name']
         
         if 'id' in kwargs:
             self._id_ = kwargs['id']
@@ -116,6 +117,12 @@ class Layer(object):
     def set_previous(self, prevs_layer):
         self._prevs_ = [prevs_layer]
         
+    def _check_kwargs(self, kwargs):
+        for key in kwargs:
+            if key not in self._base_allowed_kwargs_:
+                raise Exception("'" + key + "' is not an allowed argument!")
+        return
+        
     # -------- Private methods --------
     
     # Add self to all prev layers' nexts pointer
@@ -161,14 +168,13 @@ class Layer(object):
 class Template(Layer):
     """Template for users to create a Layer. 
     """
-    def __init__(self, name=None):
-        super(Template, self).__init__(name)
-        
+    def __init__(self, W_init, trainable_params=['W'], **kwargs):
+        self._legal_params_ = ['W']
+        super(Template, self).__init__(**kwargs)
+        self._W_init_ = W_init
+        self._trainable_params_ = trainable_params
         """
         # self._legal_params_ = []
-        # init shared params
-        # self._params_
-        # self._reg_value_
         """
         
     def __call__(self, in_layers):
@@ -176,6 +182,9 @@ class Template(Layer):
         # self._prevs_
         # self._nexts_
         # self._out_shape_
+        # init shared params
+        # self._params_
+        # self._reg_value_
         """
         pass
         
@@ -336,7 +345,7 @@ class Dense(Layer):
     
     def compile(self):
         self._inputs_ = [layer.output_ for layer in self._prevs_]
-        input = K.concatenate(self._inputs_, axis=0)
+        input = K.concatenate(self._inputs_, axis=-1)
         self._output_ = self._get_output(input)
 
     @classmethod
@@ -559,25 +568,26 @@ def _reshape(input, **kwargs):
 class Reshape(Lambda):
     
     def __init__(self, out_shape, **kwargs):
+        out_shape = to_tuple(out_shape)
         kwargs['out_shape'] = out_shape
         super(Reshape, self).__init__(_reshape, **kwargs)
         
-    # # ---------- Public attributes ----------
-    #     
-    # @property
-    # def info_(self):
-    #     dict = {'class_name': self.__class__.__name__, 
-    #              'id': self._id_, 
-    #              'name': self._name_,
-    #              'out_shape': self._out_shape_,}
-    #     return dict
-    #        
-    # # ---------- Public methods ----------
-    #        
-    # @classmethod
-    # def load_from_info(cls, info):
-    #     layer = cls(ndim=info['out_shape'], name=info['name'], id=info['id'])
-    #     return layer
+    # ---------- Public attributes ----------
+        
+    @property
+    def info_(self):
+        kwargs = self._base_kwargs_
+        dict = {'class_name': self.__class__.__name__, 
+                'out_shape': self._out_shape_[1:],
+                'kwargs': kwargs}
+        return dict
+           
+    # ---------- Public methods ----------
+           
+    @classmethod
+    def load_from_info(cls, info):
+        layer = cls(info['out_shape'], **info['kwargs'])
+        return layer
 
     # ------------------------------------
         
