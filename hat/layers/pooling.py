@@ -49,36 +49,42 @@ import numpy as np
 
 def _max_pooling_2d(input, **kwargs):
     pool_size = kwargs['pool_size']
-    output = K.pool2d(input, pool_size, ignore_border=True)
+    ignore_border = kwargs['ignore_border']
+    strides = kwargs['strides']
+    output = K.pool2d(input, pool_size, ignore_border, strides)
     return output
     
 class MaxPooling2D(Lambda):
-    """Max Pooling 2D, usually applied after Convolution2D
+    """Max Pooling 2D, usually applied after Conv2D
     
     Args:
       pool_size: tuple of interger, e.g. (2,2). Size to pool. 
+      ignore_border: bool. 
+      strides: None | tuple of integer. If set to None then will be equal to pool_size. 
       kwargs: see Layer class for details. 
     """
-    def __init__(self, pool_size, **kwargs):
+    def __init__(self, pool_size, strides=None, ignore_border=True, **kwargs):
         kwargs['pool_size'] = pool_size
-        self._pool_size_ = pool_size
+        kwargs['strides'] = strides
+        kwargs['ignore_border'] = ignore_border
         super(MaxPooling2D, self).__init__(_max_pooling_2d, **kwargs)
     
     # ---------- Public attributes ----------
     
     @property
     def info_(self):
-        kwargs = self._base_kwargs_
         info = { 'class_name': self.__class__.__name__, 
-                 'pool_size': self._pool_size_, 
-                 'kwargs': kwargs }
+                 'pool_size': self._kwargs_['pool_size'], 
+                 'strides': self._kwargs_['strides'], 
+                 'ignore_border': self._kwargs_['ignore_border'], 
+                 'kwargs': self._base_kwargs_ }
         return info
         
     # ---------- Public methods ----------
     
     @classmethod
     def load_from_info(cls, info):
-        layer = cls(info['pool_size'], **info['kwargs'])
+        layer = cls(info['pool_size'], info['strides'], info['ignore_border'], **info['kwargs'])
         return layer
     
     # ------------------------------------
