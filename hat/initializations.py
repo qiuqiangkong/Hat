@@ -37,6 +37,17 @@ def glorot_uniform( shape ):
         fan_out = shape[0] * receptive_field_size
     scale = np.sqrt( 6. / ( fan_in+fan_out ) )
     return uniform( shape, scale )
+    
+def orthogonal(shape, scale=1.1):
+    """
+    orthogonal init
+    [1] Saxe et al., "Exact solutions to the nonlinear dynamics of learning in deep linear neural networks"
+    """
+    assert len(shape)==2, "Dimension of weights using orthogonal init must be 2!"
+    a = np.random.normal(0.0, 1.0, shape)
+    u, _, v = np.linalg.svd(a, full_matrices=False)
+    q = u if u.shape == shape else v
+    return scale * q
 
 
 ### return function from name
