@@ -188,10 +188,10 @@ class Model(Base):
                 n_params += self._n_layer_params(layer)
         return n_params
         
-    def set_gt_nodes(self, target_dims):
+    def set_gt_nodes(self, target_dim_list):
         """Set gt_nodes for computing loss for training. 
         """
-        self._gt_nodes_ = [K.placeholder(y_dim) for y_dim in target_dims]
+        self._gt_nodes_ = [K.placeholder(y_dim) for y_dim in target_dim_list]
         
     def _set_epoch(self, epoch):
         self._epoch_ = epoch
@@ -338,11 +338,11 @@ class Model(Base):
         for layer in self._effective_layers_:
             layer.compile()
             
-    def get_optimization_func(self, target_dims, loss_func, optimizer, clip):
+    def get_optimization_func(self, target_dim_list, loss_func, optimizer, clip):
         """Compile and return optimization function. 
         
         Args:
-          target_dims: list of integars. targets' dimension. e.g. target_dims=[2]
+          target_dim_list: list of integars. targets' dimension. e.g. target_dim_list=[2]
           loss_func: string | function. 
           optimizer: object. 
           clip: None | real value. 
@@ -351,7 +351,7 @@ class Model(Base):
           optimization function. 
         """
         # set gt nodes
-        self.set_gt_nodes(target_dims)
+        self.set_gt_nodes(target_dim_list)
         
         # Default loss
         if type(loss_func) is str:
@@ -381,7 +381,7 @@ class Model(Base):
         return f
         
     def fit(self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', 
-             optimizer=SGD(lr=0.01, momentum=0.9), clip=None, callbacks=[], shuffle=True, verbose=1):
+             optimizer=SGD(lr=0.01, momentum=0.9), clip=None, callbacks=[], shuffle=True, generator=None, verbose=1):
         """Fit data and train model. The data is reshuffled after every epoch. 
         
         Args:
@@ -411,8 +411,8 @@ class Model(Base):
         
         # Compile optimization function
         timer = Timer()
-        target_dims = [e.ndim for e in y]
-        f_optimize = self.get_optimization_func(target_dims, loss_func, optimizer, clip)
+        target_dim_list = [e.ndim for e in y]
+        f_optimize = self.get_optimization_func(target_dim_list, loss_func, optimizer, clip)
         timer.show("Compiling f_optimize time:")
         
         # Compile for callback
@@ -436,8 +436,7 @@ class Model(Base):
         
         while self.epoch_ < max_epoch:
             # Shuffle data
-            if shuffle:
-                x, y = supports.shuffle(x, y)
+            if shuffle: x, y = supports.shuffle(x, y)
 
             # Train
             t1 = time.time()
@@ -445,6 +444,9 @@ class Model(Base):
             for i2 in xrange(batch_num):
                 batch_x = [e[i2*batch_size : min((i2+1)*batch_size, N)] for e in x]
                 batch_y = [e[i2*batch_size : min((i2+1)*batch_size, N)] for e in y]
+                if generator: 
+                    assert len(batch_x) == 1, "generator only supports single batch now!"
+                    batch_x = to_list(generator.generate(batch_x[0]))
                 in_list = batch_x + batch_y + [1.]      # training phase
                 loss = f_optimize(*in_list)[0]                      
                 loss_list.append(loss)
@@ -462,22 +464,22 @@ class Model(Base):
                 if (self.epoch_ % callback.call_freq_ == 0):
                     callback.call()
         
-    def train_on_batch(self, func, x, y):
+    def train_on_batch(self, func, batch_x, batch_y):
         """Train model on batch data. 
         
         Args:
           func: function. 
-          x: ndarray | list of ndarray. 
-          y: ndarray | list of ndarray. 
+          batch_x: ndarray | list of ndarray. 
+          batch_y: ndarray | list of ndarray. 
         """
-        x = to_list(x)
-        y = to_list(y)
+        batch_x = to_list(batch_x)
+        batch_y = to_list(batch_y)
         
         # Format data
-        x = [K.format_data(e) for e in x]
-        y = [K.format_data(e) for e in y]
+        batch_x = [K.format_data(e) for e in batch_x]
+        batch_y = [K.format_data(e) for e in batch_y]
         
-        in_list = x + y + [1.]      # training phase
+        in_list = batch_x + batch_y + [1.]      # training phase
         loss = func(*in_list)[0]   
         
         self._set_iter(self.iter_ + 1)                   
