@@ -18,6 +18,11 @@ def categorical_crossentropy(p_y_pred, y_gt):
     p_y_pred = K.clip(p_y_pred, _EPSILON, 1. - _EPSILON)
     return K.mean(K.categorical_crossentropy(p_y_pred, y_gt))
     
+def sparse_categorical_crossentropy(p_y_pred, y_gt):
+    p_y_pred = K.clip(p_y_pred, _EPSILON, 1. - _EPSILON)
+    y_gt = K.to_one_hot(y_gt, )
+    return K.mean(K.categorical_crossentropy(p_y_pred, y_gt))
+    
 # binary crossentropy
 def binary_crossentropy(p_y_pred, y_gt):
     p_y_pred = K.clip(p_y_pred, _EPSILON, 1. - _EPSILON)    
