@@ -7,7 +7,7 @@ Modified: 2017.02.19
 '''
 
 import sys
-from supports import to_list, shuffle, memory_usage, Timer
+from supports import to_list, shuffle, format_data_list, memory_usage, Timer
 import numpy as np
 import supports
 from optimizers import *
@@ -62,6 +62,8 @@ class Model(Base):
         
         self._check_duplicate_name(self._effective_layers_)
         self._trainable_table_ = self._init_trainable_table(self._effective_layers_)
+        
+        self._f_optimize_ = None
 
     # ------------------ Private methods ------------------
     
@@ -198,6 +200,17 @@ class Model(Base):
         
     def _set_iter(self, iter):
         self._iter_ = iter
+        
+    # get target dim list if transformer exists or not
+    def _get_target_dim_list(self, x, y, transformer):
+        if not transformer:
+            target_dim_list = [e.ndim for e in y]
+        else:
+            test_x = [e[0:2] for e in x]
+            test_y = [e[0:2] for e in y]
+            (_, test_y) = transformer.transform(test_x, test_y)
+            target_dim_list = [e.ndim for e in test_y]
+        return target_dim_list
     
     # ------------------ Public methods ------------------
     
@@ -379,9 +392,9 @@ class Model(Base):
         outputs = [loss_node]
         f = K.function_no_given(inputs, outputs, updates)
         return f
-        
+     
     def fit(self, x, y, batch_size=100, n_epochs=10, loss_func='categorical_crossentropy', 
-             optimizer=SGD(lr=0.01, momentum=0.9), clip=None, callbacks=[], shuffle=True, generator=None, verbose=1):
+             optimizer=SGD(lr=0.01, momentum=0.9), clip=None, callbacks=[], shuffle=True, transformer=None, verbose=1):
         """Fit data and train model. The data is reshuffled after every epoch. 
         
         Args:
@@ -394,6 +407,7 @@ class Model(Base):
           clip: real value. 
           callbacks: list of Callback object. 
           shuffle: bool. 
+          transformer: Transformation object. 
           verbose: 0 | 1 | 2
           
         Returns: None. (All trained models, results should be saved using callbacks.)
@@ -402,8 +416,8 @@ class Model(Base):
         y = to_list(y)
         
         # Format data
-        x = [K.format_data(e) for e in x]
-        y = [K.format_data(e) for e in y]
+        x = format_data_list(x)
+        y = format_data_list(y)
         
         # Train memory usage
         print "Training", 
@@ -411,7 +425,7 @@ class Model(Base):
         
         # Compile optimization function
         timer = Timer()
-        target_dim_list = [e.ndim for e in y]
+        target_dim_list = self._get_target_dim_list(x, y, transformer)
         f_optimize = self.get_optimization_func(target_dim_list, loss_func, optimizer, clip)
         timer.show("Compiling f_optimize time:")
         
@@ -444,13 +458,14 @@ class Model(Base):
             for i2 in xrange(batch_num):
                 batch_x = [e[i2*batch_size : min((i2+1)*batch_size, N)] for e in x]
                 batch_y = [e[i2*batch_size : min((i2+1)*batch_size, N)] for e in y]
-                if generator: 
-                    assert len(batch_x) == 1, "generator only supports single batch now!"
-                    batch_x = to_list(generator.generate(batch_x[0]))
+                if transformer: 
+                    (batch_x, batch_y) = transformer.transform(batch_x, batch_y)
+                    batch_x = format_data_list(batch_x)
+                    batch_y = format_data_list(batch_y)
                 in_list = batch_x + batch_y + [1.]      # training phase
                 loss = f_optimize(*in_list)[0]                      
                 loss_list.append(loss)
-                self._iter_ += 1
+                # self._iter_ += 1
                 if verbose==1: self._print_progress(self.epoch_, batch_num, i2)
                 if verbose==2: self._print_progress_loss(self.epoch_, batch_num, i2, loss)
                 
@@ -464,26 +479,137 @@ class Model(Base):
                 if (self.epoch_ % callback.call_freq_ == 0):
                     callback.call()
         
-    def train_on_batch(self, func, batch_x, batch_y):
-        """Train model on batch data. 
+    
+    # def train_on_batch(self, func, batch_x, batch_y):
+    #     """Train model on batch data. 
+    #     
+    #     Args:
+    #       func: function. 
+    #       batch_x: ndarray | list of ndarray. 
+    #       batch_y: ndarray | list of ndarray. 
+    #     """
+    #     batch_x = to_list(batch_x)
+    #     batch_y = to_list(batch_y)
+    #     
+    #     # Format data
+    #     batch_x = format_data_list(batch_x)
+    #     batch_y = format_data_list(batch_y)
+    #     
+    #     in_list = batch_x + batch_y + [1.]      # training phase
+    #     loss = func(*in_list)[0]   
+    #     
+    #     self._set_iter(self.iter_ + 1)                   
+    #     return loss
+    
+    def train_on_batch(self, batch_x, batch_y, loss_func='categorical_crossentropy', 
+                       optimizer=SGD(lr=0.01, momentum=0.9), clip=None, callbacks=[], 
+                       transformer=None, recompile=False):
+        """Train model on single batch data. 
         
         Args:
-          func: function. 
           batch_x: ndarray | list of ndarray. 
           batch_y: ndarray | list of ndarray. 
+          loss_func: str | function. 
+          optimizer: optimization object. 
+          clip: real value. 
+          callbacks: list of Callback object. 
+          transformer: Transformation object. 
+          recompile: bool. Recompile the optimize function or not. 
+          
+        Returns: None. (All trained models, results should be saved using callbacks.)
         """
         batch_x = to_list(batch_x)
         batch_y = to_list(batch_y)
         
         # Format data
-        batch_x = [K.format_data(e) for e in batch_x]
-        batch_y = [K.format_data(e) for e in batch_y]
+        batch_x = format_data_list(batch_x)
+        batch_y = format_data_list(batch_y)
         
+        # Compile optimization function
+        if (not self._f_optimize_) or (recompile):
+            timer = Timer()
+            target_dim_list = self._get_target_dim_list(batch_x, batch_y, transformer)
+            self._f_optimize_ = self.get_optimization_func(target_dim_list, loss_func, optimizer, clip)
+            timer.show("Compiling f_optimize time:")
+            
+            # Compile for callback
+            timer = Timer()
+            if callbacks is not None:
+                callbacks = to_list(callbacks)
+                for callback in callbacks:
+                    callback.compile(self) 
+            timer.show("Compiling callbacks time:")
+        
+        
+        for callback in callbacks:
+            if (self.iter_ % callback.call_freq_ == 0):
+                print self.iter_, 'th iteration:'
+                callback.call()
+        
+        # Train
+        t1 = time.time()
+        if transformer: 
+            (batch_x, batch_y) = transformer.transform(batch_x, batch_y)
+            batch_x = format_data_list(batch_x)
+            batch_y = format_data_list(batch_y)
         in_list = batch_x + batch_y + [1.]      # training phase
-        loss = func(*in_list)[0]   
-        
-        self._set_iter(self.iter_ + 1)                   
+        loss = self._f_optimize_(*in_list)[0]
+        self._iter_ += 1
+        t2 = time.time()
+        self._tr_time_ += (t2 - t1)
         return loss
+        
+    def fit_generator(self, x, y, generator, loss_func='categorical_crossentropy', 
+             optimizer=SGD(lr=0.01, momentum=0.9), clip=None, callbacks=[], transformer=None, verbose=1):
+        
+        # Train
+        for batch_x, batch_y in generator.generate(x, y):
+            batch_x = to_list(batch_x)
+            batch_y = to_list(batch_y)
+            t1 = time.time()
+            
+            # Compile optimization function
+            if not self._f_optimize_:
+                # Train memory usage
+                batch_size = len(batch_x[0])
+                print "Training", 
+                self._show_memory_usage(self._effective_layers_, batch_size)
+                
+                timer = Timer()
+                target_dim_list = self._get_target_dim_list(batch_x, batch_y, transformer)
+                self._f_optimize_ = self.get_optimization_func(target_dim_list, loss_func, optimizer, clip)
+                timer.show("Compiling f_optimize time:")
+                
+                # Compile for callback
+                timer = Timer()
+                if callbacks is not None:
+                    callbacks = to_list(callbacks)
+                    for callback in callbacks:
+                        callback.compile(self) 
+                timer.show("Compiling callbacks time:")
+                
+            if transformer: 
+                (batch_x, batch_y) = transformer.transform(batch_x, batch_y)
+            batch_x = format_data_list(batch_x)
+            batch_y = format_data_list(batch_y)
+            
+            # Callback
+            for callback in callbacks:
+                if (self.iter_ % callback.call_freq_ == 0):
+                    print
+                    callback.call()
+            
+            in_list = batch_x + batch_y + [1.]      # training phase
+            loss = self._f_optimize_(*in_list)[0]
+            self._iter_ += 1
+            
+            t2 = time.time()
+            self._tr_time_ += (t2 - t1)
+            sys.stdout.write("iteration: %d  time per batch: %f \r" % (self._iter_, t2-t1))
+            sys.stdout.flush()
+            
+            
+            
         
     def predict(self, x, batch_size=100):
         """Predict output using current model. 
@@ -536,10 +662,7 @@ class Model(Base):
         """
         # Format data
         z = to_list(z)
-        z = [K.format_data(e) for e in z]
-        
-        # pickle.dump( z[0], open( '/user/HS229/qk00006/my_code2015.5-/python/Hat_compare_keras/compare_hat_x_1.p', 'wb' ) )
-        # pause
+        z = format_data_list(z)
         
         # Calculating all in same time
         if batch_size is None:
@@ -568,10 +691,7 @@ class Model(Base):
                     
             y_out = _reform(y_out)
         
-        if len(y_out)==1:
-            return y_out[0]
-        else:
-            return y_out
+        return y_out
             
     @property
     def info_( self ):
