@@ -491,6 +491,12 @@ class Lambda(Layer):
         
     # ---------- Private methods ------------
     
+    def _get_pseudo_test_num(self):
+        if 'pseudo_test_num' in self._kwargs_.keys():
+            return self._kwargs_['pseudo_test_num']
+        else:
+            return 1
+    
     def _calculate_out_shape(self, in_shapes):
         """use pseudo data to get out_shape
         """
@@ -498,7 +504,8 @@ class Lambda(Layer):
         dict = {}
         for in_shape in in_shapes:
             u = K.placeholder(len(in_shape))
-            data = K.format_data(np.zeros((1,)+in_shape[1:]))   # pseudo data
+            pseudo_test_num = self._get_pseudo_test_num()
+            data = K.format_data(np.zeros((pseudo_test_num,)+in_shape[1:]))   # pseudo data
             us.append(u)
             dict[u] = data
         
