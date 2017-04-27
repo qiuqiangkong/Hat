@@ -95,8 +95,15 @@ def power(x, a):
 def prod(x):
     return T.prod(x)
 
-def conv2d(input, filters, border_mode, strides):
-    return T.nnet.conv2d(input, filters, border_mode=border_mode, subsample=strides)
+def conv2d(input, filters, border_mode, strides, dilation_rate):
+    return T.nnet.conv2d(input, filters, border_mode=border_mode, subsample=strides, filter_dilation=dilation_rate)
+    
+def conv2d_transpose(input, filters, output_shape, border_mode, strides):    
+    return T.nnet.conv2d_transpose(input=input, 
+                                   filters=filters, 
+                                   output_shape=output_shape, 
+                                   border_mode=border_mode, 
+                                   input_dilation=strides)
     
 def pool2d(input, ds, ignore_border=True, st=None, padding=(0, 0), mode='max'):
     if mode=='avg': mode='average_exc_pad'
