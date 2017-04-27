@@ -296,16 +296,6 @@ class Validation(Callback):
         self._is_va_ = self._is_data(va_x, va_y)
         self._is_te_ = self._is_data(te_x, te_y)
         
-        # format data, to list
-        # if self._is_tr_:
-        #     self._tr_x_ = format_data_list(to_list(tr_x))
-        #     self._tr_y_ = format_data_list(to_list(tr_y))
-        # if self._is_va_:
-        #     self._va_x_ = format_data_list(to_list(va_x))
-        #     self._va_y_ = format_data_list(to_list(va_y))
-        # if self._is_te_:
-        #     self._te_x_ = format_data_list(to_list(te_x))
-        #     self._te_y_ = format_data_list(to_list(te_y))
         self._tr_x_ = tr_x
         self._tr_y_ = tr_y
         self._va_x_ = va_x
@@ -327,8 +317,6 @@ class Validation(Callback):
         return r
     
     def _is_data(self, x, y):
-        # if (x is not None) and (y is not None):
-        #     return True
         if (x is not None) or (y is not None):
             return True
         else:
@@ -387,53 +375,10 @@ class Validation(Callback):
         
         # calculate metric values
         t1 = time.time()
-        # if self._generator_:
-        #     n_all = 0.
-        #     cnt= 0.
-        #     metric_vals = np.zeros(len(self._metrics_))
-        #     batch_num = sum(1 for it in self._generator_(x, y))
-        #     for batch_x, batch_y in self._generator_(x, y):
-        #         curr_batch_size = batch_x[0].shape[0]
-        #         n_all += curr_batch_size
-        #         cnt += 1.
-        #         if self._transformer_:
-        #             (batch_x, batch_y) = self._transformer_.transform(batch_x, batch_y)
-        #             batch_x = format_data_list(batch_x)
-        #             batch_y = format_data_list(batch_y)
-        #         in_list = batch_x + batch_y + [0.]
-        #         batch_metric_vals = np.array(self._f_evaluate(*in_list))
-        #         metric_vals += batch_metric_vals * curr_batch_size
-        #         if self._verbose_==1: self._print_progress(batch_num, cnt)
-        #     metric_vals /= n_all
-        # else:
-        #     if self._batch_size_ is None:
-        #         in_list = x + y + [0.]
-        #         metric_vals = np.array(self._f_evaluate(*in_list))
-        #     else:
-        #         N = len(x[0])
-        #         batch_num = int(np.ceil(float(N) / self._batch_size_))
-        #         metric_vals = np.zeros(len(self._metrics_))
-        #         
-        #         # evaluate for each batch
-        #         for i1 in xrange(batch_num):
-        #             curr_batch_size = min((i1+1)*self._batch_size_, N) - i1*self._batch_size_
-        #             batch_x = [e[i1*self._batch_size_ : min((i1+1)*self._batch_size_, N)] for e in x]
-        #             batch_y = [e[i1*self._batch_size_ : min((i1+1)*self._batch_size_, N)] for e in y]
-        #             if self._transformer_:
-        #                 (batch_x, batch_y) = self._transformer_.transform(batch_x, batch_y)
-        #                 batch_x = format_data_list(batch_x)
-        #                 batch_y = format_data_list(batch_y)
-        #             in_list = batch_x + batch_y + [0.]
-        #             batch_metric_vals = np.array(self._f_evaluate(*in_list))
-        #             metric_vals += batch_metric_vals * curr_batch_size
-        #             if self._verbose_==1: self._print_progress(batch_num, i1)
-        #             
-        #         metric_vals /= N
         if self._generator_:
             generator = self._generator_
         else:
-            # generator = self._get_default_generator
-            generator = self._DefaultGenerator()
+            generator = self._DefaultGenerator(self._batch_size_)
         n_all = 0.
         cnt= 0.
         metric_vals = np.zeros(len(self._metrics_))
@@ -446,8 +391,8 @@ class Validation(Callback):
             cnt += 1.
             if self._transformer_:
                 (batch_x, batch_y) = self._transformer_.transform(batch_x, batch_y)
-                batch_x = format_data_list(batch_x)
-                batch_y = format_data_list(batch_y)
+            batch_x = format_data_list(batch_x)
+            batch_y = format_data_list(batch_y)
             in_list = batch_x + batch_y + [0.]
             batch_metric_vals = np.array(self._f_evaluate(*in_list))
             metric_vals += batch_metric_vals * curr_batch_size
@@ -461,10 +406,14 @@ class Validation(Callback):
         self._print_time_results(eval_type, self._metrics_, metric_vals, t2-t1)
             
     class _DefaultGenerator(BaseGenerator):
+        def __init__(self, batch_size):
+            self._batch_size_ = batch_size
+        
         def generate(self, x, y):
+            x = to_list(x)
+            y = to_list(y)
             N = len(x[0])
             batch_num = int(np.ceil(float(N) / self._batch_size_))
-            metric_vals = np.zeros(len(self._metrics_))
             
             # evaluate for each batch
             for i1 in xrange(batch_num):
@@ -472,19 +421,6 @@ class Validation(Callback):
                 batch_x = [e[i1*self._batch_size_ : min((i1+1)*self._batch_size_, N)] for e in x]
                 batch_y = [e[i1*self._batch_size_ : min((i1+1)*self._batch_size_, N)] for e in y]
                 yield batch_x, batch_y
-    
-    # def _get_default_generator(self, x, y):
-    #     N = len(x[0])
-    #     batch_num = int(np.ceil(float(N) / self._batch_size_))
-    #     metric_vals = np.zeros(len(self._metrics_))
-    #     
-    #     # evaluate for each batch
-    #     for i1 in xrange(batch_num):
-    #         curr_batch_size = min((i1+1)*self._batch_size_, N) - i1*self._batch_size_
-    #         batch_x = [e[i1*self._batch_size_ : min((i1+1)*self._batch_size_, N)] for e in x]
-    #         batch_y = [e[i1*self._batch_size_ : min((i1+1)*self._batch_size_, N)] for e in y]
-    #         yield batch_x, batch_y
-        
             
     # print progress on screen
     def _print_progress(self, batch_num, curr_batch_num):
