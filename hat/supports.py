@@ -23,6 +23,10 @@ def to_list(x):
         x = [x]
     return x
     
+# format data list
+def format_data_list(x):
+    return [K.format_data(e) for e in x]
+    
 def is_one_element(x):
     if len(x)==1: return True
     else: return False
