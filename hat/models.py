@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import pickle
 
 
-class Model(Base):
+class Model(object):
     """Build deep learning model.
     Methods:
       summary()
@@ -370,6 +370,7 @@ class Model(Base):
         if type(loss_func) is str:
             assert len(self.out_nodes_)==1, "If the number of out_layers > 1, you need define your own loss_func!"
             loss_node = obj.get(loss_func)(self.out_nodes_[0], self.gt_nodes_[0])
+            
         # User defined loss
         else:
             loss_node = loss_func(self)
@@ -478,28 +479,6 @@ class Model(Base):
             for callback in callbacks:
                 if (self.epoch_ % callback.call_freq_ == 0):
                     callback.call()
-        
-    
-    # def train_on_batch(self, func, batch_x, batch_y):
-    #     """Train model on batch data. 
-    #     
-    #     Args:
-    #       func: function. 
-    #       batch_x: ndarray | list of ndarray. 
-    #       batch_y: ndarray | list of ndarray. 
-    #     """
-    #     batch_x = to_list(batch_x)
-    #     batch_y = to_list(batch_y)
-    #     
-    #     # Format data
-    #     batch_x = format_data_list(batch_x)
-    #     batch_y = format_data_list(batch_y)
-    #     
-    #     in_list = batch_x + batch_y + [1.]      # training phase
-    #     loss = func(*in_list)[0]   
-    #     
-    #     self._set_iter(self.iter_ + 1)                   
-    #     return loss
     
     def train_on_batch(self, batch_x, batch_y, loss_func='categorical_crossentropy', 
                        optimizer=SGD(lr=0.01, momentum=0.9), clip=None, callbacks=[], 
@@ -559,6 +538,27 @@ class Model(Base):
         self._tr_time_ += (t2 - t1)
         return loss
         
+    def train_on_batch_with_func(self, func, batch_x, batch_y):
+        """Train model on batch data. 
+        
+        Args:
+          func: function. 
+          batch_x: ndarray | list of ndarray. 
+          batch_y: ndarray | list of ndarray. 
+        """
+        batch_x = to_list(batch_x)
+        batch_y = to_list(batch_y)
+        
+        # Format data
+        batch_x = format_data_list(batch_x)
+        batch_y = format_data_list(batch_y)
+        
+        in_list = batch_x + batch_y + [1.]      # training phase
+        loss = func(*in_list)[0]   
+        
+        self._set_iter(self.iter_ + 1)                   
+        return loss
+        
     def fit_generator(self, x, y, generator, loss_func='categorical_crossentropy', 
              optimizer=SGD(lr=0.01, momentum=0.9), clip=None, callbacks=[], transformer=None, verbose=1):
         
@@ -605,18 +605,16 @@ class Model(Base):
             
             t2 = time.time()
             self._tr_time_ += (t2 - t1)
-            sys.stdout.write("iteration: %d  time per batch: %f \r" % (self._iter_, t2-t1))
+            sys.stdout.write("iteration: %d  loss: %f  time per batch: %.2f \r" % (self._iter_, loss, t2-t1))
             sys.stdout.flush()
-            
-            
-            
         
-    def predict(self, x, batch_size=100):
+    def predict(self, x, batch_size, tr_phase=0.):
         """Predict output using current model. 
         
         Args:
           x: ndarray | list of ndarray. 
-          batch_size: integar. 
+          batch_size: integar. Predict batch size. 
+          tr_phase: 0. | 1. Test phase or train phase. 
           
         Returns:
           ndarray | list of ndarray. 
@@ -628,7 +626,7 @@ class Model(Base):
             self._f_predict = K.function_no_given(inputs, self.out_nodes_)
             timer.show("Compiling f_predict time:")
         
-        return self.run_function(self._f_predict, x, batch_size)
+        return self.run_function(self._f_predict, x, batch_size, tr_phase)
         
     def get_observe_forward_func(self, observe_nodes):
         observe_nodes = to_list(observe_nodes)
@@ -649,7 +647,7 @@ class Model(Base):
         timer.show("Compiling f_observe_backward time:")
         return f_observe_backward
         
-    def run_function(self, func, z, batch_size):
+    def run_function(self, func, z, batch_size, tr_phase):
         """Return output of a function given value. 
         
         Args:
@@ -666,7 +664,7 @@ class Model(Base):
         
         # Calculating all in same time
         if batch_size is None:
-            in_list = z + [0.]
+            in_list = z + [tr_phase]
             y_out = func(*in_list)
         # Calculating in batch
         else:
@@ -675,7 +673,7 @@ class Model(Base):
             n_out_nodes = len(self.out_nodes_)
             y_out = []      # list of batch_y_out
             for i1 in xrange(batch_num):
-                in_list = [e[i1*batch_size : min((i1+1)*batch_size, N)] for e in z] + [0.]
+                in_list = [e[i1*batch_size : min((i1+1)*batch_size, N)] for e in z] + [tr_phase]
                 batch_y_out = func(*in_list)    # list of ndarray
                 y_out.append(batch_y_out)
 
