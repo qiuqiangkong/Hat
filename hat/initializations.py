@@ -9,22 +9,22 @@ import numpy as np
 import backend as K
 
 
-def zeros( shape ):
-    return np.zeros( shape )
+def zeros(shape):
+    return np.zeros(shape)
     
-def ones( shape ):
-    return np.ones( shape )
+def ones(shape):
+    return np.ones(shape)
 
-def eye( len ):
+def eye(len):
     """Identity matrix
     """
-    return np.eye( len )
+    return np.eye(len)
 
-def uniform( shape, scale=0.01 ):
-    return np.random.uniform( -scale, scale, shape )
+def uniform(shape, scale=0.01):
+    return np.random.uniform(-scale, scale, shape)
     
 
-def glorot_uniform( shape ):   
+def glorot_uniform(shape):   
     """
     glorot uniform
     [1] Glorot, Xavier, and Yoshua Bengio. "Understanding the difficulty of training deep feedforward neural networks." 2010.
@@ -35,8 +35,8 @@ def glorot_uniform( shape ):
         receptive_field_size = shape[2]*shape[3]
         fan_in = shape[1] * receptive_field_size
         fan_out = shape[0] * receptive_field_size
-    scale = np.sqrt( 6. / ( fan_in+fan_out ) )
-    return uniform( shape, scale )
+    scale = np.sqrt(6. / (fan_in+fan_out))
+    return uniform(shape, scale)
     
 def orthogonal(shape, scale=1.1):
     """
@@ -51,9 +51,9 @@ def orthogonal(shape, scale=1.1):
 
 
 ### return function from name
-def get( init ):
-    f = globals().get( init )
+def get(init):
+    f = globals().get(init)
     if f is None:
-        raise Exception( "No this init_value method!" )
+        raise Exception("No this init_value method!")
     else:
         return f
