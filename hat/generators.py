@@ -2,5 +2,9 @@ class BaseGenerator(object):
     def __init__(self):
         pass
         
-    def generate(self, x, y):
+    """
+    xs: list of ndarray
+    ys: list of ndarray
+    """
+    def generate(self, xs, ys):
         raise NotImplementedError("generate() need to be implemented!")
