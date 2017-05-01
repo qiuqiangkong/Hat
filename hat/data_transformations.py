@@ -5,10 +5,10 @@ class BaseTransformation(object):
         pass
         
     """
-    x: list of ndarray
-    y: list of ndarray
+    xs: list of ndarray
+    ys: list of ndarray
     """
-    def transform(self, x, y):
+    def transform(self, xs, ys):
         raise NotImplementedError("transform() need to be implemented!")
 
 class ImageAugmentation(BaseTransformation):
