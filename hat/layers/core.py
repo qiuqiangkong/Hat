@@ -299,14 +299,16 @@ class Dense(Layer):
         
         # shared params
         n_in = np.sum([layer.out_shape_[-1] for layer in in_layers])
-        self._W_ = self._init_params(self._W_init_, self._init_type_, 
-                                     shape=(n_in, self._n_out_), 
-                                     name=str(self._name_)+'_W'
-                                     )
-        self._b_ = self._init_params(self._b_init_, 'zeros', 
-                                     shape=(self._n_out_,), 
-                                     name=str(self._name_)+'_b'
-                                     )
+        if not hasattr(self, '_W_'):
+            self._W_ = self._init_params(self._W_init_, self._init_type_, 
+                                        shape=(n_in, self._n_out_), 
+                                        name=str(self._name_)+'_W'
+                                        )
+        if not hasattr(self, '_b_'):
+            self._b_ = self._init_params(self._b_init_, 'zeros', 
+                                        shape=(self._n_out_,), 
+                                        name=str(self._name_)+'_b'
+                                        )
         
         # set params & update reg_value
         self.set_trainable_params_and_update_reg(self._trainable_params_)
