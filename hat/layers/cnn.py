@@ -89,10 +89,12 @@ class Conv1D(Layer):
 
         # shared params
         filter_shape = (self._n_outfmaps_, n_infmaps, self._len_filter_, 1)
-        self._W_ = self._init_params(self._W_init_, self._init_type_, 
-                                      filter_shape, name=str(self._name_)+'_W')                                        
-        self._b_ = self._init_params(self._b_init_, 'zeros', 
-                                      self._n_outfmaps_, name=str(self._name_)+'_b')
+        if not hasattr(self, '_W_'):
+            self._W_ = self._init_params(self._W_init_, self._init_type_, 
+                                        filter_shape, name=str(self._name_)+'_W')                                        
+        if not hasattr(self, '_b_'):
+            self._b_ = self._init_params(self._b_init_, 'zeros', 
+                                        self._n_outfmaps_, name=str(self._name_)+'_b')
                                       
         # DO NOT DELETE! initialization same as keras for debug
         # tmp_shape = (self._len_filter_, 1, n_infmaps, self._n_outfmaps_)
@@ -267,10 +269,12 @@ class Conv2D(Layer):
   
         # shared params
         filter_shape = (self._n_outfmaps_, n_infmaps, self._n_row_, self._n_col_)
-        self._W_ = self._init_params(self._W_init_, self._init_type_, 
-                                      filter_shape, name=str(self._name_)+'_W')
-        self._b_ = self._init_params(self._b_init_, 'zeros', 
-                                      self._n_outfmaps_, name=str(self._name_)+'_b')
+        if not hasattr(self, '_W_'):
+            self._W_ = self._init_params(self._W_init_, self._init_type_, 
+                                        filter_shape, name=str(self._name_)+'_W')
+        if not hasattr(self, '_b_'):                                
+            self._b_ = self._init_params(self._b_init_, 'zeros', 
+                                        self._n_outfmaps_, name=str(self._name_)+'_b')
                                       
         # set params & update reg_value
         self.set_trainable_params_and_update_reg(self._trainable_params_)
