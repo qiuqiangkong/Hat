@@ -608,7 +608,7 @@ class Model(object):
             sys.stdout.write("iteration: %d  loss: %f  time per batch: %.2f \r" % (self._iter_, loss, t2-t1))
             sys.stdout.flush()
         
-    def predict(self, x, batch_size=100, tr_phase=0.):
+    def predict(self, x, batch_size=128, tr_phase=0.):
         """Predict output using current model. 
         
         Args:
