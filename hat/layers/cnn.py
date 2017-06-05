@@ -387,14 +387,6 @@ class Conv2DTranspose(Conv2D):
       See Conv2D. 
     """
     def _get_out_shape(self, height, width, n_row, n_col, border_mode, strides, dilation_rate):
-        # if border_mode == 'valid':
-        #     pads = (0, 0)
-        # elif border_mode == 'full':
-        #     pads = (n_row-1, n_col-1)
-        # elif type(border_mode) == tuple:
-        #     pads = border_mode
-        # else:
-        #     raise Exception("Do not support border_mode='" + border_mode + "'!")
         pads = self._get_pads(border_mode)
         out_shape = (None, self._n_outfmaps_, 
                      conv_transpose_out_len(height, n_row, pads[0], strides[0]), 

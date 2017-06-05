@@ -96,7 +96,7 @@ def reshape_3d_to_4d(X):
     
     
 # sparse label to categorical label
-# x is 1-dim ndarray
+# x: ndarray
 def sparse_to_categorical(x, n_out):
     x = x.astype(int)   # force type to int
     shape = x.shape

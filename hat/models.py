@@ -587,7 +587,7 @@ class Model(object):
                     for callback in callbacks:
                         callback.compile(self) 
                 timer.show("Compiling callbacks time:")
-                
+            
             if transformer: 
                 (batch_x, batch_y) = transformer.transform(batch_x, batch_y)
             batch_x = format_data_list(batch_x)
