@@ -1,5 +1,0 @@
-Mnist recognition with autoencoder
-==================================
-
-run main_ae.py		# train 2 layer autoencoder and finetune
-run plot_weights.py	# visualize 1-st layer weights
