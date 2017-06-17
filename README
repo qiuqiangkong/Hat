@@ -1,16 +1,13 @@
-2016.05.26
-====================
-Hat is a deep learning framework on top of Theano
-Characters:
-1. including DNN, CNN, RNN (LSTM, GRU), Dropout. 
-2. Build any structure as you like! 
+Hat is a deep learning framework on top of Theano. Hat contains many built layers, such as fully connected layer, CNN, LSTM, ...
+Hat will help you do fast research and fast implementation! 
+
+(Reference: Keras https://github.com/fchollet/keras)
 
 Prerequisite:
-1. python version: 2.7+
-   numpy
-2. theano
-3. networkx (optional. for ploting graph)
-   matplotlib
+python version: 2.7+
+numpy
+theano
+matplotlib
 
 Installation:
 $ pip install Hat
