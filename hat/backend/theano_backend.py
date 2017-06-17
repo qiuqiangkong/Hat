@@ -237,18 +237,34 @@ def grad(cost, params):
     return theano.grad(cost, params)
     
 # rnn, input.shape: (n_batch, n_time, n_in)
-def rnn(step_function, input, init_h, go_backwards):
+def rnn(step_function, input, init_states, go_backwards):
     ndim = input.ndim
+    if type(init_states) is not list:
+        init_states = [init_states]
     axes = [1,0] + list(range(2, ndim))
     swap_input = input.dimshuffle(axes)     # shape: (n_time, n_batch, n_in)
     
-    outputs, _ = theano.scan(step_function, sequences=[swap_input], outputs_info=[init_h], go_backwards=go_backwards)
-    last_output = outputs[-1]
+    # outputs, _ = theano.scan(step_function, sequences=[swap_input], outputs_info=init_states, go_backwards=go_backwards)
+    # last_output = outputs[-1]
+    # 
+    # axes = [1,0] + list(range(2, ndim))
+    # outputs = outputs.dimshuffle(axes)
+    # states = last_output
+    # return last_output, outputs, states
+    
+    outputs, _ = theano.scan(step_function, sequences=[swap_input], outputs_info=init_states, go_backwards=go_backwards)
     
     axes = [1,0] + list(range(2, ndim))
-    outputs = outputs.dimshuffle(axes)
-    states = last_output
-    return last_output, outputs, states
+    if type(outputs) is list:      # multi outputs, e.g. LSTM
+        last_outputs = (e[-1] for e in outputs)
+        outputs = (e.dimshuffle(axes) for e in outputs)
+        states = outputs
+        return last_outputs, outputs, states
+    else:                           # single output, e.g. SimpleRnn, GRU
+        last_output = outputs[-1]
+        output = outputs.dimshuffle(axes)
+        state = last_output
+        return last_output, output, state
     
 # # scan, interface is same as theano
 # scan = theano.scan
