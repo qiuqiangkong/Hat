@@ -12,6 +12,7 @@ from layers.cnn import *
 from layers.pooling import *
 from layers.rnn import *
 from layers.normalization import *
+from layers.embeddings import *
 from models import *
 
 
