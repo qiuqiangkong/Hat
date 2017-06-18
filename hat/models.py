@@ -613,7 +613,7 @@ class Model(object):
         
         Args:
           x: ndarray | list of ndarray. 
-          batch_size: integar. Predict batch size. 
+          batch_size: integar | None. Predict batch size. 
           tr_phase: 0. | 1. Test phase or train phase. 
           
         Returns:
