@@ -90,18 +90,18 @@ class SimpleRNN(RnnBase):
         self._out_shape_ = self._get_out_shape(in_shape)
         
         # shared params
-        self._W_ = self._init_params(self._W_init_, self._kernel_init_type_, 
-                                     shape=(n_in, self._n_out_), 
-                                     name=str(self._name_)+'_W'
-                                    )
-        self._H_ = self._init_params(self._H_init_, self._recurrent_init_type_, 
-                                     shape=(self._n_out_, self._n_out_), 
-                                     name=str(self._name_)+'_H'
-                                    )
-        self._b_ = self._init_params(self._b_init_, 'zeros', 
-                                     shape=(self._n_out_,), 
-                                     name=str(self._name_)+'_b'
-                                    )
+        if not hasattr(self, '_W_'):
+            self._W_ = self._init_params(self._W_init_, self._kernel_init_type_, 
+                                        shape=(n_in, self._n_out_), 
+                                        name=str(self._name_)+'_W')
+        if not hasattr(self, '_H_'):
+            self._H_ = self._init_params(self._H_init_, self._recurrent_init_type_, 
+                                        shape=(self._n_out_, self._n_out_), 
+                                        name=str(self._name_)+'_H')
+        if not hasattr(self, '_b_'):
+            self._b_ = self._init_params(self._b_init_, 'zeros', 
+                                        shape=(self._n_out_,), 
+                                        name=str(self._name_)+'_b')
         self._init_h_ = None  # will be allocated in compile()
                                                                  
         # set params & update reg_value
@@ -212,24 +212,25 @@ class LSTM(RnnBase):
         self._out_shape_ = self._get_out_shape(in_shape)
         
         # shared params
-        self._W_ = self._init_params(self._W_init_, self._kernel_init_type_, 
-                                     shape=(n_in, self._n_out_ * 4), 
-                                     name=str(self._name_)+'_W'
-                                    )
-        self._U_ = self._init_params(self._U_init_, self._recurrent_init_type_, 
-                                     shape=(self._n_out_, self._n_out_ * 4), 
-                                     name=str(self._name_)+'_U'
-                                    )
-        if self._b_init_ is None:
-            np_b = np.concatenate((np.zeros(self._n_out_), 
-                                   np.ones(self._n_out_) * self._forget_bias_init_, 
-                                   np.zeros(self._n_out_), 
-                                   np.zeros(self._n_out_)), 
-                                   axis=0)
-            self._b_ = K.shared(np_b, name=str(self._name_)+'_b')
-            
-        else:
-            self._b_ = K.shared(self._b_init_, name=str(self._name_)+'_b')
+        if not hasattr(self, '_W_'):
+            self._W_ = self._init_params(self._W_init_, self._kernel_init_type_, 
+                                        shape=(n_in, self._n_out_ * 4), 
+                                        name=str(self._name_)+'_W')
+        if not hasattr(self, '_U_'):
+            self._U_ = self._init_params(self._U_init_, self._recurrent_init_type_, 
+                                        shape=(self._n_out_, self._n_out_ * 4), 
+                                        name=str(self._name_)+'_U')
+        if not hasattr(self, '_b_'):
+            if self._b_init_ is None:
+                np_b = np.concatenate((np.zeros(self._n_out_), 
+                                    np.ones(self._n_out_) * self._forget_bias_init_, 
+                                    np.zeros(self._n_out_), 
+                                    np.zeros(self._n_out_)), 
+                                    axis=0)
+                self._b_ = K.shared(np_b, name=str(self._name_)+'_b')
+                
+            else:
+                self._b_ = K.shared(self._b_init_, name=str(self._name_)+'_b')
                                               
         # set params & update reg_value
         self.set_trainable_params_and_update_reg(self._trainable_params_)
@@ -352,18 +353,18 @@ class GRU(RnnBase):
         self._out_shape_ = self._get_out_shape(in_shape)
         
         # shared params
-        self._W_ = self._init_params(self._W_init_, self._kernel_init_type_, 
-                                     shape=(n_in, self._n_out_ * 3), 
-                                     name=str(self._name_)+'_W'
-                                    )
-        self._U_ = self._init_params(self._U_init_, self._recurrent_init_type_, 
-                                     shape=(self._n_out_, self._n_out_ * 3), 
-                                     name=str(self._name_)+'_U'
-                                    )
-        self._b_ = self._init_params(self._b_init_, 'zeros', 
-                                     shape=(self._n_out_ * 3,), 
-                                     name=str(self._name_)+'_b'
-                                    )
+        if not hasattr(self, '_W_'):
+            self._W_ = self._init_params(self._W_init_, self._kernel_init_type_, 
+                                        shape=(n_in, self._n_out_ * 3), 
+                                        name=str(self._name_)+'_W')
+        if not hasattr(self, '_U_'):
+            self._U_ = self._init_params(self._U_init_, self._recurrent_init_type_, 
+                                        shape=(self._n_out_, self._n_out_ * 3), 
+                                        name=str(self._name_)+'_U')
+        if not hasattr(self, '_b_'):
+            self._b_ = self._init_params(self._b_init_, 'zeros', 
+                                        shape=(self._n_out_ * 3,), 
+                                        name=str(self._name_)+'_b')
         self._init_h_ = None  # will be allocated in compile()
         
         self._Wz_ = self._W_[:, 0:self._n_out_]
