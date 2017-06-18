@@ -244,14 +244,6 @@ def rnn(step_function, input, init_states, go_backwards):
     axes = [1,0] + list(range(2, ndim))
     swap_input = input.dimshuffle(axes)     # shape: (n_time, n_batch, n_in)
     
-    # outputs, _ = theano.scan(step_function, sequences=[swap_input], outputs_info=init_states, go_backwards=go_backwards)
-    # last_output = outputs[-1]
-    # 
-    # axes = [1,0] + list(range(2, ndim))
-    # outputs = outputs.dimshuffle(axes)
-    # states = last_output
-    # return last_output, outputs, states
-    
     outputs, _ = theano.scan(step_function, sequences=[swap_input], outputs_info=init_states, go_backwards=go_backwards)
     
     axes = [1,0] + list(range(2, ndim))
