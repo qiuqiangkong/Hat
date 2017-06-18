@@ -14,82 +14,93 @@ from .. import activations
 from ..supports import to_list
 import numpy as np
 
-class Embedding( Layer ):
-    def __init__( self, n_vocab, n_out, init_type='uniform', W_init=None, W_reg=None, name=None ):
-        super( Embedding, self ).__init__( name )
+class Embedding(Layer):
+    def __init__(self, n_vocab, n_out, init_type='uniform', W_init=None, W_reg=None, 
+                 trainable_params=['W'], **kwargs):
+        self._legal_params_ = ['W']
+        
+        super(Embedding, self).__init__(**kwargs)
         self._n_vocab_ = n_vocab
         self._n_out_ = n_out
         self._init_type_ = init_type
         self._W_init_ = W_init
         self._W_reg_ = W_reg
+        self._trainable_params_ = trainable_params
         
-    def __call__( self, in_layers ):
-        in_layers = to_list( in_layers )
-        assert len(in_layers)==1, "The input of Embedding can only be one layer!"
-        in_layer = in_layers[0]
-        
-        in_shape = in_layer.out_shape_
-        assert len(in_shape)==2, "dim of input shape must be 2, (batch_num, n_time) Your shape is " + str(in_shape)
-        input = in_layer.output_
-        
-        # init W
-        self._W_ = self._init_params( self._W_init_, self._init_type_, shape=(self._n_vocab_, self._n_out_), name=str(self._name_)+'_W' )
-        
-        # output 
-        output = self._W_[ K.cast( input, 'int32' ) ]
-        
-        # assign attributes
+    def __call__(self, in_layers):
+        in_layers = to_list(in_layers)
         self._prevs_ = in_layers
         self._nexts_ = []
-        self._out_shape_ = in_shape + (self._n_out_,)
-        self._output_ = output
-        self._params_ = [ self._W_ ]
-        self._reg_value_ = self._get_reg()
+        self._out_shape_ = in_layers[0].out_shape_ + (self._n_out_,)
+
+        
+        in_shape = in_layers[0].out_shape_
+        assert len(in_shape)==2, "dim of input shape must be 2, (batch_num, n_time) Your shape is " + str(in_shape)
+        input = in_layers[0].output_
+        
+        # init W
+        if not hasattr(self, '_W_'):
+            self._W_ = self._init_params(self._W_init_, self._init_type_, 
+                                         shape=(self._n_vocab_, self._n_out_), 
+                                         name=str(self._name_)+'_W')
+        
+        # set params & update reg_value
+        self.set_trainable_params_and_update_reg(self._trainable_params_)
         
         # below are compulsory parts
-        [ layer.add_next(self) for layer in in_layers ]     # add this layer to all prev layers' nexts pointer
-        self._check_attributes()                             # check if all attributes are implemented
+        self._add_self_to_prevs_layer(in_layers)     # add this layer to all prev layers' nexts pointer
+        self._check_attributes()                       # check if all attributes are implemented
         return self
         
     # ---------- Public attributes ----------
         
     @property
-    def W_( self ):
-        return K.get_value( self._W_ )
+    def W_(self):
+        return K.get_value(self._W_)
         
-    # layer's info & params
     @property
-    def info_( self ):
-        dict = { 'class_name': self.__class__.__name__, 
-                 'id': self._id_, 
-                 'name': self._name_, 
+    def info_(self):
+        kwargs = self._base_kwargs_
+        info = {'class_name': self.__class__.__name__, 
+                 'n_vocab': self._n_vocab_, 
                  'n_out': self._n_out_, 
                  'init_type': self._init_type_,     # mute if W is None
                  'W': self.W_, 
-                 'W_reg_info': regularizations.get_info( self._W_reg_ ), }
-        return dict
+                 'W_reg_info': regularizations.get_info(self._W_reg_), 
+                 'trainable_params': self._trainable_params_, 
+                 'kwargs': kwargs}
+        return info
         
     # ---------- Public methods ----------
     
-    # load layer from info
+    def compile(self):
+        self._inputs_ = [layer.output_ for layer in self._prevs_]
+        input = K.concatenate(self._inputs_, axis=-1)
+        self._output_ = self._get_output(input)
+    
     @classmethod
-    def load_from_info( cls, info ):
-        W_reg = regularizations.get_obj( info['W_reg_info'] )
-
-        layer = cls( n_out=info['n_out'], init_type=info['init_type'], 
-                     W_init=info['W'], W_reg=W_reg, name=info['name'] )
+    def load_from_info(cls, info):
+        W_reg = regularizations.get_obj(info['W_reg_info'])
+        
+        layer = cls(n_vocab=info['n_vocab'], n_out=info['n_out'], 
+                    init_type=info['init_type'], W_init=info['W'], W_reg=W_reg, 
+                    trainable_params=info['trainable_params'], **info['kwargs'])
                      
         return layer
         
     # ---------- Private methods ----------
         
     # get regularization
-    def _get_reg( self ):
+    def _get_reg(self):
         reg_value = 0. 
         
         if self._W_reg_ is not None:
-            reg_value += self._W_reg_.get_reg( [self._W_] )
+            reg_value += self._W_reg_.get_reg([self._W_])
             
         return reg_value
+        
+    def _get_output(self, input):
+        output = self._W_[K.cast(input, 'int32')]
+        return output
         
     # ------------------------------------
