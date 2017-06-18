@@ -10,8 +10,11 @@ theano
 matplotlib
 
 Installation:
-$ pip install Hat
+$ pip install hat
 (or you can install from source code)
+
+Upgrade:
+$ pip install hat --upgrade
 
 Examples:
 https://github.com/qiuqiangkong/Hat/tree/master/examples
