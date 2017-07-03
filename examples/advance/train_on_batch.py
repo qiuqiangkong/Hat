@@ -25,36 +25,35 @@ from utils.load_data import load_mnist
 
 
 class DataGenerator(object):
-    def __init__(self, batch_size, type):
+    def __init__(self, batch_size, type, te_max_iter=None):
         assert type in ['train', 'test']
         self._batch_size_ = batch_size
         self._type_ = type
+        self._te_max_iter_ = te_max_iter
         
     def generate(self, xs, ys):
         x = xs[0]
         y = ys[0]
         batch_size = self._batch_size_
-        (n_samples, n_features) = x.shape
+        n_samples = len(x)
         
         index = np.arange(n_samples)
+        np.random.shuffle(index)
         
-        if self._type_ == 'test':
-            max_epoch = 1
-        elif self._type_ == 'train':
-            max_epoch = 99999
-            np.random.shuffle(index)
-        
+        iter = 0
+        epoch = 0
         pointer = 0
-        epoch = 1
         while True:
-            batch_x = []
-            batch_y = []
-            
+            if (self._type_ == 'test') and (self._te_max_iter_ is not None):
+                if iter == self._te_max_iter_:
+                    break
+            iter += 1
             if pointer >= n_samples:
-                if epoch == max_epoch: break
                 epoch += 1
+                if (self._type_) == 'test' and (epoch == 1):
+                    break
                 pointer = 0
-                np.random.shuffle(index)
+                np.random.shuffle(index)                
  
             batch_idx = index[pointer : min(pointer + batch_size, n_samples)]
             pointer += batch_size
@@ -62,16 +61,16 @@ class DataGenerator(object):
         
         
 class BalanceDataGenerator(object):
-    def __init__(self, batch_size, type):
-        assert type in ['train']
+    def __init__(self, batch_size, type, te_max_iter=100):
+        assert type in ['train', 'test']
         self._batch_size_ = batch_size
         self._type_ = type
+        self._te_max_iter_ = te_max_iter
         
     def generate(self, xs, ys):
         batch_size = self._batch_size_
         x = xs[0]
         y = ys[0]
-        (n_samples, n_features) = x.shape
         (n_samples, n_labs) = y.shape
         n_each = batch_size // n_labs   
         
@@ -83,17 +82,20 @@ class BalanceDataGenerator(object):
             np.random.shuffle(index_list[i1])
         
         pointer_list = [0] * n_labs
-        epoch = 1
+        len_list = [len(e) for e in index_list]
+        iter = 0
         while True:
+            if (self._type_) == 'test' and (iter == self._te_max_iter_):
+                break
+            iter += 1
             batch_x = []
             batch_y = []
             for i1 in xrange(n_labs):
-                idx_num = len(index_list[i1])
-                if pointer_list[i1] >= idx_num:
+                if pointer_list[i1] >= len_list[i1]:
                     pointer_list[i1] = 0
                     np.random.shuffle(index_list[i1])
                 
-                batch_idx = index_list[i1][pointer_list[i1] : min(pointer_list[i1] + n_each, idx_num)]
+                batch_idx = index_list[i1][pointer_list[i1] : min(pointer_list[i1] + n_each, len_list[i1])]
                 batch_x.append(x[batch_idx])
                 batch_y.append(y[batch_idx])
                 pointer_list[i1] += n_each
@@ -105,13 +107,14 @@ class BalanceDataGenerator(object):
 # evaluate on batch
 def eval(md, gen, xs, ys):
     pred_all = []
+    y_all = []
     for (batch_x, batch_y) in gen.generate(xs=xs, ys=ys):
         pred = md.predict(batch_x, batch_size=None)[0]
         pred_all.append(pred)
+        y_all.append(batch_y)
     pred_all = np.concatenate(pred_all, axis=0)
-    
-    y = ys[0]
-    err = metrics.categorical_error(pred_all, y)
+    y_all = np.concatenate(y_all, axis=0)
+    err = metrics.categorical_error(pred_all, y_all)
     return err
 
 
@@ -162,7 +165,12 @@ if balance:
 else:
     tr_gen = DataGenerator(batch_size=500, type='train')
     
-eval_gen = DataGenerator(batch_size=500, type='test')
+
+bal_eval = True
+if bal_eval:
+    eval_gen = BalanceDataGenerator(batch_size=500, type='test', te_max_iter=10)
+else:
+    eval_gen = DataGenerator(batch_size=500, type='test')
 
 eval_freq = 200
 tr_time = time.time()
