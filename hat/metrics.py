@@ -42,9 +42,10 @@ def categorical_crossentropy(p_y_pred, y_gt):
     
 def binary_crossentropy(p_y_pred, y_gt):
     assert len(p_y_pred)==len(y_gt), "Length of y_out and y_gt (ground true) is not equal!"
-    N = len(p_y_pred)
+    # N = len(p_y_pred)
     p_y_pred = np.clip(p_y_pred, _EPSILON, 1.-_EPSILON)
-    crossentropy = -np.sum(y_gt * np.log(p_y_pred) + (1-y_gt) * np.log(1-p_y_pred)) / float(N)
+    # crossentropy = -np.sum(y_gt * np.log(p_y_pred) + (1-y_gt) * np.log(1-p_y_pred)) / float(N)
+    crossentropy = -np.mean(y_gt * np.log(p_y_pred) + (1.-y_gt) * np.log(1.-p_y_pred))
     return crossentropy
     
 def mse(y_pred, y_gt):
@@ -62,14 +63,14 @@ def kl_divergence(y_pred, y_gt):
     y_gt = np.clip(y_gt, _EPSILON, 1. - _EPSILON)
     return np.mean(np.sum(y_gt * np.log(y_gt / y_pred) - y_gt + y_pred, axis=-1))
 
-# def tp_tn_fp_fn(p_y_pred, y_gt, thres):
-#     y_pred = np.zeros_like(p_y_pred)
-#     y_pred[ np.where(p_y_pred>thres) ] = 1.
-#     tp = np.sum(y_pred + y_gt > 1.5)
-#     tn = np.sum(y_pred + y_gt < 0.5)
-#     fp = np.sum(y_pred - y_gt > 0.5)
-#     fn = np.sum(y_gt - y_pred > 0.5)
-#     return tp, tn, fp, fn
+def tp_fn_fp_fn(p_y_pred, y_gt, thres):
+    y_pred = np.zeros_like(p_y_pred)
+    y_pred[ np.where(p_y_pred>thres) ] = 1.
+    tp = np.sum(y_pred + y_gt > 1.5)
+    fn = np.sum(y_gt - y_pred > 0.5)
+    fp = np.sum(y_pred - y_gt > 0.5)
+    tn = np.sum(y_pred + y_gt < 0.5)
+    return tp, fn, fp, tn
 
 def prec_recall_fvalue(p_y_pred, y_gt, thres):
     tp, tn, fp, fn = tp_tn_fp_fn(p_y_pred, y_gt, thres)
