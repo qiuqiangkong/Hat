@@ -63,7 +63,7 @@ def kl_divergence(y_pred, y_gt):
     y_gt = np.clip(y_gt, _EPSILON, 1. - _EPSILON)
     return np.mean(np.sum(y_gt * np.log(y_gt / y_pred) - y_gt + y_pred, axis=-1))
 
-def tp_fn_fp_fn(p_y_pred, y_gt, thres):
+def tp_fn_fp_tn(p_y_pred, y_gt, thres):
     y_pred = np.zeros_like(p_y_pred)
     y_pred[ np.where(p_y_pred>thres) ] = 1.
     tp = np.sum(y_pred + y_gt > 1.5)
