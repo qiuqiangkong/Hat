@@ -7,7 +7,7 @@ Modified: 2017.02.19
 '''
 
 import sys
-from supports import to_list, shuffle, format_data_list, memory_usage, Timer
+from supports import to_list, shuffle, format_data_list, memory_usage, Timer, print_or_logging
 import numpy as np
 import supports
 from optimizers import *
@@ -168,11 +168,11 @@ class Model(object):
         f = "{0:<30} {1:<10}"
         print f.format("total memory usage:", str(n_byte_total/1e6)+"Mb")
         
-    def _print_progress(self, epoch, batch_num, curr_batch_num):
+    def print_progress(self, epoch, batch_num, curr_batch_num):
         sys.stdout.write("%d-th epoch %d%% \r" % (epoch, float(curr_batch_num)/float(batch_num)*100))
         sys.stdout.flush()
     
-    def _print_progress_loss(self, epoch, batch_num, curr_batch_num, loss):
+    def print_progress_loss(self, epoch, batch_num, curr_batch_num, loss):
         sys.stdout.write("%d-th epoch %d%%   %s %f \r" % (epoch, float(curr_batch_num)/float(batch_num)*100, 'tr_loss:', loss))
         sys.stdout.flush()
         
@@ -214,7 +214,7 @@ class Model(object):
     
     # ------------------ Public methods ------------------
     
-    def summary(self, verbose=1):
+    def summary(self, verbose=1, is_logging=False):
         """Print model information. 
         """
         def _get_params_str(params):
@@ -224,28 +224,32 @@ class Model(object):
             return string[:-2]
         
         if verbose==1:
-            print '---------- summary -----------'
+            print_or_logging(is_logging, '---------- summary -----------')
             f = "{0:<20} {1:<10} {2:<25} {3:<20} {4:<15} {5:<20} {6:<20}"
-            print f.format('layer_name', 'layer_id', 'prev layers', 'trainable_params', 'n_params', 'out_shape', 'trainable')
+            print_or_logging(is_logging, f.format('layer_name', 'layer_id', 'prev layers', 'trainable_params', 'n_params', 'out_shape', 'trainable'))
             for row in self.trainable_table_:
                 [index, layer, trainable] = row
                 prev_layer_names = [prev_layer.name_ for prev_layer in layer.prevs_]
                 n_params = self._n_layer_params(layer)
-                print f.format(layer.name_, layer.id_, prev_layer_names, 
-                            _get_params_str(layer.params_), n_params, str(layer.out_shape_), trainable)
-            print "\nTotal trainable params:", self._n_model_trainable_params(), "\n"
+                print_or_logging(is_logging, f.format(layer.name_, layer.id_, prev_layer_names, 
+                            _get_params_str(layer.params_), n_params, str(layer.out_shape_), trainable))
+            print_or_logging(is_logging, "")
+            print_or_logging(is_logging, "Total trainable params: %d" % self._n_model_trainable_params())
+            print_or_logging(is_logging, "")
         
         elif verbose==2:
-            print '---------- summary -----------'
+            print_or_logging(is_logging, '---------- summary -----------')
             f = "{0:<10} {1:<20} {2:<10} {3:<25} {4:<20} {5:<15} {6:<20} {7:<20}"
-            print f.format('tb_index', 'layer_name', 'layer_id', 'prev layers', 'trainable_params', 'n_params', 'out_shape', 'trainable')
+            print_or_logging(is_logging, f.format('tb_index', 'layer_name', 'layer_id', 'prev layers', 'trainable_params', 'n_params', 'out_shape', 'trainable'))
             for row in self.trainable_table_:
                 [index, layer, trainable] = row
                 prev_layer_names = [prev_layer.name_ for prev_layer in layer.prevs_]
                 n_params = self._n_layer_params(layer)
-                print f.format(index, layer.name_, layer.id_, prev_layer_names, 
-                            _get_params_str(layer.params_), n_params, str(layer.out_shape_), trainable)
-            print "\nTotal trainable params:", self._n_model_trainable_params(), "\n"
+                print_or_logging(is_logging, f.format(index, layer.name_, layer.id_, prev_layer_names, 
+                            _get_params_str(layer.params_), n_params, str(layer.out_shape_), trainable))
+            print_or_logging(is_logging, "")
+            print_or_logging(is_logging, "Total trainable params: %d" % self._n_model_trainable_params())
+            print_or_logging(is_logging, "")
         
     def get_effective_layers(self, in_layers, out_layers):
         """Return intersection of forward_visited and backward_visited layers. 
@@ -467,8 +471,8 @@ class Model(object):
                 loss = f_optimize(*in_list)[0]                      
                 loss_list.append(loss)
                 # self._iter_ += 1
-                if verbose==1: self._print_progress(self.epoch_, batch_num, i2)
-                if verbose==2: self._print_progress_loss(self.epoch_, batch_num, i2, loss)
+                if verbose==1: self.print_progress(self.epoch_, batch_num, i2)
+                if verbose==2: self.print_progress_loss(self.epoch_, batch_num, i2, loss)
                 
             t2 = time.time()
             self._tr_time_ += (t2 - t1)            
@@ -510,6 +514,8 @@ class Model(object):
             target_dim_list = self._get_target_dim_list(batch_x, batch_y, transformer)
             self._f_optimize_ = self.get_optimization_func(target_dim_list, loss_func, optimizer, clip)
             timer.show("Compiling f_optimize time:")
+            batch_size = len(batch_x[0])
+            self._show_memory_usage(self._effective_layers_, batch_size)
             
             # Compile for callback
             timer = Timer()

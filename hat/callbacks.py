@@ -14,7 +14,7 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import time
-from supports import to_list, format_data_list
+from supports import to_list, format_data_list, print_or_logging
 import sys
 from inspect import isfunction
 
@@ -71,9 +71,10 @@ class SaveModel(Callback):
     """
     Save Model every n-epoches
     """
-    def __init__(self, dump_fd, call_freq=3, type='epoch'):
+    def __init__(self, dump_fd, call_freq=3, type='epoch', is_logging=False):
         super(SaveModel, self).__init__(call_freq, type)
         self._dump_fd_ = dump_fd
+        self._is_logging_ = is_logging
         
     def compile(self, md):
         self._md_ = md
@@ -85,7 +86,8 @@ class SaveModel(Callback):
             dump_path = self._dump_fd_ + '/md' + str(self._md_.iter_) + '_iters.p'
             
         serializations.save(self._md_, dump_path)
-        print "    Save to " + dump_path + " successfully!\n"
+        string = "    Save to " + dump_path + " successfully!\n"
+        print_or_logging(self._is_logging_, string)
         
 
 
@@ -108,7 +110,7 @@ class Validation(Callback):
     def __init__(self, tr_x=None, tr_y=None, va_x=None, va_y=None, 
                  te_x=None, te_y=None, batch_size=100, call_freq=3, 
                  metrics=['categorical_error'], generator=None, transformer=None, 
-                 dump_path=None, type='epoch', verbose=1):
+                 dump_path=None, type='epoch', verbose=1, is_logging=False):
         # init values
         super(Validation, self).__init__(call_freq, type)
         self._batch_size_ = batch_size
@@ -119,6 +121,7 @@ class Validation(Callback):
         self._type_ = type
         self._verbose_ = verbose
         self._r_ = self._init_result()
+        self._is_logging_ = is_logging
         
         # judge if train or valid or test data exists
         self._is_tr_ = self._is_data(tr_x, tr_y)
@@ -262,7 +265,7 @@ class Validation(Callback):
             metric_name = self._to_str(metrics[i1])
             chs += eval_type + "_" + metric_name + ": %.5f" % metric_vals[i1] + "    | "
         chs += "time: %.2f" % time
-        print chs
+        print_or_logging(self._is_logging_, chs)
         
     def _to_str(self, a):
         if type(a) is str:

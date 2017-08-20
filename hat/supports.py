@@ -8,6 +8,7 @@ Modified: -
 import numpy as np
 import sys
 import time
+import logging
 import backend as K
 
 ### basic
@@ -37,6 +38,12 @@ def is_elem_equal(x):
 # Get mask from data (for RNN). size(mask): batch_num*n_time
 def get_mask(input):
     return K.neq(K.sum(K.abs(input), axis=-1), 0.)
+    
+def print_or_logging(is_logging, s):
+    if is_logging:
+        logging.info(s)
+    else:
+        print(s)
     
 ### data related
 # shuffle data
