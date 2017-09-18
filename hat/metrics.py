@@ -25,7 +25,7 @@ def categorical_error(p_y_pred, y_gt):
     
 def binary_error(p_y_pred, y_gt, thres):
     assert p_y_pred.shape==y_gt.shape, "shape of y_out " + str(p_y_pred.shape) + " and y_gt " + str(y_gt.shape) + " (ground truth) are not equal!"
-    tp, tn, fp, fn = tp_tn_fp_fn(p_y_pred, y_gt, thres)
+    (tp, fn, fp, tn) = tp_fn_fp_tn(p_y_pred, y_gt, thres)
     return float(fp+fn) / (tp+tn+fp+fn)
     
 '''
@@ -37,7 +37,7 @@ def categorical_crossentropy(p_y_pred, y_gt):
     N = len(p_y_pred)
     p_y_pred = np.clip(p_y_pred, _EPSILON, 1.-_EPSILON)
     # crossentropy = -np.sum(y_gt * np.log(p_y_pred)) / float(N)
-    crossentropy = np.mean(np.sum(y_gt * np.log(p_y_pred), axis=-1))
+    crossentropy = - np.mean(np.sum(y_gt * np.log(p_y_pred), axis=-1))
     return crossentropy
     
 def binary_crossentropy(p_y_pred, y_gt):
@@ -73,14 +73,14 @@ def tp_fn_fp_tn(p_y_pred, y_gt, thres):
     return tp, fn, fp, tn
 
 def prec_recall_fvalue(p_y_pred, y_gt, thres):
-    tp, tn, fp, fn = tp_tn_fp_fn(p_y_pred, y_gt, thres)
+    tp, tn, fp, fn = tp_fn_fp_tn(p_y_pred, y_gt, thres)
     prec = tp / float(tp + fp)
     recall = tp / float(tp + fn)
     fvalue = 2 * (prec * recall) / (prec + recall)
     return prec, recall, fvalue
     
 def tpr_fpr(p_y_pred, y_gt, thres):
-    tp, tn, fp, fn = tp_tn_fp_fn(p_y_pred, y_gt, thres)
+    tp, tn, fp, fn = tp_fn_fp_tn(p_y_pred, y_gt, thres)
     tpr = tp / float(tp + fn)
     fpr = fp / float(fp + tn)
     return tpr, fpr
