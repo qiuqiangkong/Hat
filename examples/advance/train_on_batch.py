@@ -172,12 +172,14 @@ if bal_eval:
 else:
     eval_gen = DataGenerator(batch_size=500, type='test')
 
+optimizer=Adam(1e-3)
+
 eval_freq = 200
 tr_time = time.time()
 for (tr_batch_x, tr_batch_y) in tr_gen.generate(xs=[tr_x], ys=[tr_y]):
     md.train_on_batch(batch_x=tr_batch_x, batch_y=tr_batch_y, 
                       loss_func='categorical_crossentropy', 
-                      optimizer=Adam(1e-3), 
+                      optimizer=optimizer, 
                       callbacks=callbacks)
     if md.iter_ % eval_freq == 0:
         print "train time:", time.time() - tr_time, "s\n"
