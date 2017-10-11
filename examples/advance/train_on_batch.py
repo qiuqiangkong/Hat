@@ -118,80 +118,80 @@ def eval(md, gen, xs, ys):
     err = metrics.categorical_error(pred_all, y_all)
     return err
 
-
-# Load & prepare data
-tr_x, tr_y, va_x, va_y, te_x, te_y = load_mnist()
-
-# Init params
-n_in = 784
-n_hid = 500
-n_out = 10
-
-# Sparse label to 1-of-K categorical label
-tr_y = sparse_to_categorical(tr_y, n_out)
-va_y = sparse_to_categorical(va_y, n_out)
-te_y = sparse_to_categorical(te_y, n_out)
-
-# Build model
-lay_in = InputLayer(in_shape=(n_in,))
-a = Dense(n_out=n_hid, act='relu')(lay_in)
-a = Dropout(p_drop=0.2)(a)
-a = Dense(n_out=n_hid, act='relu')(a)
-a = Dropout(p_drop=0.2)(a)
-lay_out = Dense(n_out=n_out, act='softmax')(a)
-
-md = Model(in_layers=[lay_in], out_layers=[lay_out])
-md.compile()
-md.summary()
-
-# Callbacks
-dump_fd = 'train_on_batch_models'
-if not os.path.exists(dump_fd): os.makedirs(dump_fd)
-save_model = SaveModel(dump_fd=dump_fd, call_freq=200, type='iter')
-
-validation = Validation(tr_x=tr_x, tr_y=tr_y, 
-                        va_x=None, va_y=None, 
-                        te_x=te_x, te_y=te_y, 
-                        batch_size=500, 
-                        metrics=['categorical_error'], 
-                        call_freq=200, 
-                        type='iter')
-
-callbacks = [save_model, validation]
-
-# Data generator
-balance = True
-if balance:
-    tr_gen = BalanceDataGenerator(batch_size=500, type='train')
-else:
-    tr_gen = DataGenerator(batch_size=500, type='train')
+if __name__ == '__main__':
+    # Load & prepare data
+    tr_x, tr_y, va_x, va_y, te_x, te_y = load_mnist()
     
-bal_eval = True
-if bal_eval:
-    eval_gen = BalanceDataGenerator(batch_size=500, type='test', te_max_iter=10)
-else:
-    eval_gen = DataGenerator(batch_size=500, type='test')
-
-# Optimizer
-optimizer=Adam(1e-3)
-
-# Train
-eval_freq = 200
-tr_time = time.time()
-for (tr_batch_x, tr_batch_y) in tr_gen.generate(xs=[tr_x], ys=[tr_y]):
-    if md.iter_ % eval_freq == 0:
-        print("Train time: %s" % (time.time() - tr_time,))
-        eval_time = time.time()
-        tr_err = eval(md=md, gen=eval_gen, xs=[tr_x], ys=[tr_y])
-        te_err = eval(md=md, gen=eval_gen, xs=[te_x], ys=[te_y])
-        print("iters: %d tr_err: %f" % (md.iter_, tr_err))
-        print("iters: %d te_err: %f" % (md.iter_, te_err))
-        print("Eval time: %s " % (time.time() - eval_time))
+    # Init params
+    n_in = 784
+    n_hid = 500
+    n_out = 10
     
-    md.train_on_batch(batch_x=tr_batch_x, batch_y=tr_batch_y, 
-                      loss_func='categorical_crossentropy', 
-                      optimizer=optimizer, 
-                      callbacks=callbacks)
+    # Sparse label to 1-of-K categorical label
+    tr_y = sparse_to_categorical(tr_y, n_out)
+    va_y = sparse_to_categorical(va_y, n_out)
+    te_y = sparse_to_categorical(te_y, n_out)
     
+    # Build model
+    lay_in = InputLayer(in_shape=(n_in,))
+    a = Dense(n_out=n_hid, act='relu')(lay_in)
+    a = Dropout(p_drop=0.2)(a)
+    a = Dense(n_out=n_hid, act='relu')(a)
+    a = Dropout(p_drop=0.2)(a)
+    lay_out = Dense(n_out=n_out, act='softmax')(a)
     
+    md = Model(in_layers=[lay_in], out_layers=[lay_out])
+    md.compile()
+    md.summary()
     
+    # Callbacks
+    dump_fd = 'train_on_batch_models'
+    if not os.path.exists(dump_fd): os.makedirs(dump_fd)
+    save_model = SaveModel(dump_fd=dump_fd, call_freq=200, type='iter')
+    
+    validation = Validation(tr_x=tr_x, tr_y=tr_y, 
+                            va_x=None, va_y=None, 
+                            te_x=te_x, te_y=te_y, 
+                            batch_size=500, 
+                            metrics=['categorical_error'], 
+                            call_freq=200, 
+                            type='iter')
+    
+    callbacks = [save_model, validation]
+    
+    # Data generator
+    balance = True
+    if balance:
+        tr_gen = BalanceDataGenerator(batch_size=500, type='train')
+    else:
+        tr_gen = DataGenerator(batch_size=500, type='train')
+        
+    bal_eval = True
+    if bal_eval:
+        eval_gen = BalanceDataGenerator(batch_size=500, type='test', te_max_iter=10)
+    else:
+        eval_gen = DataGenerator(batch_size=500, type='test')
+    
+    # Optimizer
+    optimizer=Adam(1e-3)
+    
+    # Train
+    eval_freq = 200
+    tr_time = time.time()
+    for (tr_batch_x, tr_batch_y) in tr_gen.generate(xs=[tr_x], ys=[tr_y]):
+        if md.iter_ % eval_freq == 0:
+            print("Train time: %s" % (time.time() - tr_time,))
+            eval_time = time.time()
+            tr_err = eval(md=md, gen=eval_gen, xs=[tr_x], ys=[tr_y])
+            te_err = eval(md=md, gen=eval_gen, xs=[te_x], ys=[te_y])
+            print("iters: %d tr_err: %f" % (md.iter_, tr_err))
+            print("iters: %d te_err: %f" % (md.iter_, te_err))
+            print("Eval time: %s " % (time.time() - eval_time))
+        
+        md.train_on_batch(batch_x=tr_batch_x, batch_y=tr_batch_y, 
+                        loss_func='categorical_crossentropy', 
+                        optimizer=optimizer, 
+                        callbacks=callbacks)
+        
+        
+        
