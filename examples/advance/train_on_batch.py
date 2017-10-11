@@ -2,6 +2,7 @@
 SUMMARY:  Example of training on batch, data generator, balanced data generator. 
 AUTHOR:   Qiuqiang Kong
 Created:  2016.06.18
+Modified: 2017.10.11
 --------------------------------------
 """
 import numpy as np
@@ -104,7 +105,7 @@ class BalanceDataGenerator(object):
             yield batch_x, batch_y
         
         
-# evaluate on batch
+# Evaluate on batch
 def eval(md, gen, xs, ys):
     pred_all = []
     y_all = []
@@ -118,15 +119,15 @@ def eval(md, gen, xs, ys):
     return err
 
 
-# load & prepare data
+# Load & prepare data
 tr_x, tr_y, va_x, va_y, te_x, te_y = load_mnist()
 
-# init params
+# Init params
 n_in = 784
 n_hid = 500
 n_out = 10
 
-# sparse label to 1-of-K categorical label
+# Sparse label to 1-of-K categorical label
 tr_y = sparse_to_categorical(tr_y, n_out)
 va_y = sparse_to_categorical(va_y, n_out)
 te_y = sparse_to_categorical(te_y, n_out)
@@ -143,7 +144,7 @@ md = Model(in_layers=[lay_in], out_layers=[lay_out])
 md.compile()
 md.summary()
 
-# callbacks
+# Callbacks
 dump_fd = 'train_on_batch_models'
 if not os.path.exists(dump_fd): os.makedirs(dump_fd)
 save_model = SaveModel(dump_fd=dump_fd, call_freq=200, type='iter')
@@ -158,36 +159,39 @@ validation = Validation(tr_x=tr_x, tr_y=tr_y,
 
 callbacks = [save_model, validation]
 
-# train
+# Data generator
 balance = True
 if balance:
     tr_gen = BalanceDataGenerator(batch_size=500, type='train')
 else:
     tr_gen = DataGenerator(batch_size=500, type='train')
     
-
 bal_eval = True
 if bal_eval:
     eval_gen = BalanceDataGenerator(batch_size=500, type='test', te_max_iter=10)
 else:
     eval_gen = DataGenerator(batch_size=500, type='test')
 
+# Optimizer
 optimizer=Adam(1e-3)
 
+# Train
 eval_freq = 200
 tr_time = time.time()
 for (tr_batch_x, tr_batch_y) in tr_gen.generate(xs=[tr_x], ys=[tr_y]):
+    if md.iter_ % eval_freq == 0:
+        print("Train time: %s" % (time.time() - tr_time,))
+        eval_time = time.time()
+        tr_err = eval(md=md, gen=eval_gen, xs=[tr_x], ys=[tr_y])
+        te_err = eval(md=md, gen=eval_gen, xs=[te_x], ys=[te_y])
+        print("iters: %d tr_err: %f" % (md.iter_, tr_err))
+        print("iters: %d te_err: %f" % (md.iter_, te_err))
+        print("Eval time: %s " % (time.time() - eval_time))
+    
     md.train_on_batch(batch_x=tr_batch_x, batch_y=tr_batch_y, 
                       loss_func='categorical_crossentropy', 
                       optimizer=optimizer, 
                       callbacks=callbacks)
-    if md.iter_ % eval_freq == 0:
-        print "train time:", time.time() - tr_time, "s\n"
-        eval_time = time.time()
-        tr_err = eval(md=md, gen=eval_gen, xs=[tr_x], ys=[tr_y])
-        te_err = eval(md=md, gen=eval_gen, xs=[te_x], ys=[te_y])
-        print "iters", md.iter_, "tr_err:", tr_err
-        print "iters", md.iter_, "te_err:", te_err
-        print "eval time:", time.time() - eval_time, "s\n"
-        tr_time = time.time()
+    
+    
     
