@@ -3,7 +3,7 @@ from setuptools import find_packages
 
 setup(
     name='Hat',
-    version='0.1.10dev',
+    version='0.1.11',
     author='Qiuqiang Kong', 
     author_email='qiuqiangkong@gmail.com', 
     description='Deep learning toolbox built on Theano', 
