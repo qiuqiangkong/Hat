@@ -73,14 +73,14 @@ def tp_fn_fp_tn(p_y_pred, y_gt, thres):
     return tp, fn, fp, tn
 
 def prec_recall_fvalue(p_y_pred, y_gt, thres):
-    tp, tn, fp, fn = tp_fn_fp_tn(p_y_pred, y_gt, thres)
+    (tp, fn, fp, tn) = tp_fn_fp_tn(p_y_pred, y_gt, thres)
     prec = tp / float(tp + fp)
     recall = tp / float(tp + fn)
     fvalue = 2 * (prec * recall) / (prec + recall)
     return prec, recall, fvalue
     
 def tpr_fpr(p_y_pred, y_gt, thres):
-    tp, tn, fp, fn = tp_fn_fp_tn(p_y_pred, y_gt, thres)
+    (tp, fn, fp, tn) = tp_fn_fp_tn(p_y_pred, y_gt, thres)
     tpr = tp / float(tp + fn)
     fpr = fp / float(fp + tn)
     return tpr, fpr
