@@ -181,6 +181,7 @@ if __name__ == '__main__':
     for (tr_batch_x, tr_batch_y) in tr_gen.generate(xs=[tr_x], ys=[tr_y]):
         if md.iter_ % eval_freq == 0:
             print("Train time: %s" % (time.time() - tr_time,))
+            tr_time = time.time()
             eval_time = time.time()
             tr_err = eval(md=md, gen=eval_gen, xs=[tr_x], ys=[tr_y])
             te_err = eval(md=md, gen=eval_gen, xs=[te_x], ys=[te_y])
@@ -192,6 +193,7 @@ if __name__ == '__main__':
                         loss_func='categorical_crossentropy', 
                         optimizer=optimizer, 
                         callbacks=callbacks)
-        
+        if md.iter_ == 10001:
+            break
         
         
