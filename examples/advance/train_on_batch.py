@@ -110,7 +110,7 @@ def eval(md, gen, xs, ys):
     pred_all = []
     y_all = []
     for (batch_x, batch_y) in gen.generate(xs=xs, ys=ys):
-        pred = md.predict(batch_x, batch_size=None)[0]
+        [pred] = md.predict(batch_x, batch_size=None)
         pred_all.append(pred)
         y_all.append(batch_y)
     pred_all = np.concatenate(pred_all, axis=0)
