@@ -74,20 +74,22 @@ def enframe(x, win, inc):
     return X
 
 # concatenate feautres     
-def mat_2d_to_3d(X, agg_num, hop):
-    # pad to at least one block
-    len_X, n_in = X.shape
-    if (len_X < agg_num):
-        X = np.concatenate((X, np.zeros((agg_num-len_X, n_in))))
+def mat_2d_to_3d(x, agg_num, hop):
+    """Segment 2D array to 3D segments. 
+    """
+    # Pad to at least one block. 
+    len_x, n_in = x.shape
+    if (len_x < agg_num):
+        x = np.concatenate((x, np.zeros((agg_num - len_x, n_in))))
         
-    # agg 2d to 3d
-    len_X = len(X)
+    # Segment 2d to 3d. 
+    len_x = len(x)
     i1 = 0
-    X3d = []
-    while (i1+agg_num <= len_X):
-        X3d.append(X[i1:i1+agg_num])
+    x3d = []
+    while (i1 + agg_num <= len_x):
+        x3d.append(x[i1 : i1 + agg_num])
         i1 += hop
-    return np.array(X3d)
+    return np.array(x3d)
 
 # convert from 3d to 4d, for input of cnn        
 def reshape_3d_to_4d(X):
