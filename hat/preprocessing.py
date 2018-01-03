@@ -14,11 +14,19 @@ import numpy as np
 from supports import to_list
 
 
-# truncate seq or pad with 0, input can be list or np.ndarray
-# the element in x should be ndarray, then pad or trunc all elements in x to max_len
-# type: 'post' | 'pre'
-# return x_new (N*ndarray), mask(N*max_len)
 def pad_trunc_seqs(x, max_len, pad_type='post'):
+    """Pad or truncate sequences. 
+    
+    Args:
+      x: ndarray | list of ndarray. Each element in x should be ndarray. Each
+          element in x is padded with 0 or truncated to max_len. 
+      max_len: int, length to be padded with 0 or truncated. 
+      pad_type, string, 'pre' | 'post'. 
+      
+    Returns: 
+      x_new: ndarray, (N, ndarray), padded or truncated sequences. 
+      mask: ndarray, (N, max_len), mask of padding. 
+    """
     list_x_new, list_mask = [], []
     for e in x:
         L = len(e)
@@ -33,13 +41,23 @@ def pad_trunc_seqs(x, max_len, pad_type='post'):
         return np.array(list_x_new), np.array(list_mask)
     else:
         raise Exception("Input should be list or ndarray!")
+    
 
-   
-# pad or trunc seq, x should be ndarray
-# return x_new (ndarray), mask (1d array)
 def pad_trunc_seq(x, max_len, pad_type='post'):
+    """Pad or truncate ndarray. 
+    
+    Args:
+      x: ndarray. 
+      max_len: int, length to be padded with 0 or truncated. 
+      pad_type, string, 'pre' | 'post'. 
+      
+    Returns:
+      x_new: ndarray, padded or truncated ndarray. 
+      mask: 1d-array, mask of padding. 
+    """
     L = len(x)
     shape = x.shape
+    data_type = x.dtype
     if L < max_len:
         pad_shape = (max_len-L,) + shape[1:]
         pad = np.zeros(pad_shape)
@@ -60,6 +78,7 @@ def pad_trunc_seq(x, max_len, pad_type='post'):
             mask = np.ones(max_len)
         else:
             raise Exception("pad_type should be 'post' | 'pre'!")
+    x_new = x_new.astype(data_type)
     return x_new, mask
 
 # enframe sequence to matrix
