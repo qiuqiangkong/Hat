@@ -92,9 +92,16 @@ def enframe(x, win, inc):
     X = np.array(Xlist)
     return X
 
-# concatenate feautres     
 def mat_2d_to_3d(x, agg_num, hop):
     """Segment 2D array to 3D segments. 
+    
+    Args:
+      x: 2darray, (n_time, n_in)
+      agg_num: int, number of frames to concatenate. 
+      hop: int, number of hop frames. 
+      
+    Returns:
+      3darray, (n_blocks, agg_num, n_in)
     """
     # Pad to at least one block. 
     len_x, n_in = x.shape
